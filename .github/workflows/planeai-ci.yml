@@ -59,8 +59,12 @@ jobs:
       - name: Bring up stack
         working-directory: deploy-local
         run: |
-          cp .env.example .env
-          # Real values not needed for smoke. CHANGE_ME stays.
+          # Use the upstream Plane variables.env in CI: its values are
+          # internally consistent (POSTGRES_PASSWORD matches the
+          # DATABASE_URL fallback, etc.). Our own .env.example has
+          # `CHANGE_ME` placeholders that don't match the hard-coded
+          # plane:plane fallback inside docker-compose.yml.
+          cp ../deployments/cli/community/variables.env .env
           docker compose -p plane-ci up -d
 
       - name: Wait for migrator to exit 0
