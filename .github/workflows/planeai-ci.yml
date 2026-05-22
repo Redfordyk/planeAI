@@ -91,11 +91,22 @@ jobs:
           docker cp scripts/verify_acl.py plane-ci-api-1:/code/plane/db/management/commands/verify_acl.py
           docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T api python manage.py verify_acl
 
-      - name: pgvector version is >= 0.8.2
+      - name: pgvector >= 0.8.2 is available + CREATE EXTENSION succeeds
         run: |
-          v=$(docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T -e PGPASSWORD=plane plane-db psql -U plane -d plane -tAc "SELECT extversion FROM pg_extension WHERE extname='vector';")
-          echo "vector=$v"
-          python3 -c "import sys; v=sys.argv[1].strip(); want=(0,8,2); got=tuple(int(x) for x in v.split('.')); sys.exit(0 if got>=want else 1)" "$v"
+          set -e
+          # Check the bundled binaries first (extension might not be
+          # installed yet — that happens in TZ 1.2 migration).
+          avail=$(docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T -e PGPASSWORD=plane plane-db \
+            psql -U plane -d plane -tAc "SELECT default_version FROM pg_available_extensions WHERE name='vector';" | tr -d '\r\n[:space:]')
+          echo "vector (available)=$avail"
+          python3 -c "import sys; v=sys.argv[1].strip(); want=(0,8,2); got=tuple(int(x) for x in v.split('.')); sys.exit(0 if got>=want else 1)" "$avail"
+          # Then install and confirm.
+          docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T -e PGPASSWORD=plane plane-db \
+            psql -U plane -d plane -c "CREATE EXTENSION IF NOT EXISTS vector;"
+          installed=$(docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T -e PGPASSWORD=plane plane-db \
+            psql -U plane -d plane -tAc "SELECT extversion FROM pg_extension WHERE extname='vector';" | tr -d '\r\n[:space:]')
+          echo "vector (installed)=$installed"
+          [ "$installed" = "$avail" ]
 
       - name: Dump container statuses on failure
         if: failure()
