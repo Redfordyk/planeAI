@@ -14,6 +14,12 @@ WORKDIR /code
 #    sys.path via manage.py / asgi.py.
 COPY ai/ /code/ai/
 
+# pytest configuration (DJANGO_SETTINGS_MODULE for pytest-django,
+# --reuse-db so we don't re-run Plane's full migration set per test
+# session). Goes to /code so `cd /code && pytest` finds it via the
+# default discovery rules.
+COPY pytest.ini /code/pytest.ini
+
 # 2. A settings shim that does `from .production import *` and appends
 #    `ai` to INSTALLED_APPS. We point DJANGO_SETTINGS_MODULE at it via
 #    docker-compose.override.yml so we never patch upstream settings

@@ -96,9 +96,9 @@ jobs:
           docker cp scripts/verify_acl.py plane-ci-api-1:/code/plane/db/management/commands/verify_acl.py
           docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T api python manage.py verify_acl
 
-      - name: pytest (ai unit tests, mocked SDKs)
+      - name: pytest (full ai/ test suite, real Postgres+pgvector)
         run: |
-          docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T api sh -c "cd /code && pytest -q ai/tests/"
+          docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T api sh -c "cd /code && pytest -v ai/tests/"
 
       - name: verify_signals (ingest hooks, real DB)
         run: |
