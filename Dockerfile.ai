@@ -1,0 +1,36 @@
+# Plane backend image with the planeAI `ai` add-on baked in.
+#
+# Base version is pinned (TZ 0.5: never use :latest — silent upstream
+# upgrades would break the build). Update the tag intentionally,
+# re-run the full smoke check, then commit.
+
+FROM makeplane/plane-backend:v1.3.1
+
+# Workdir matches /code from the base image (confirmed in TZ 0.1).
+WORKDIR /code
+
+# 1. The ai/ app code at /code/ai/ — importable as the top-level
+#    package `ai` because /code is the working directory and on
+#    sys.path via manage.py / asgi.py.
+COPY ai/ /code/ai/
+
+# 2. A settings shim that does `from .production import *` and appends
+#    `ai` to INSTALLED_APPS. We point DJANGO_SETTINGS_MODULE at it via
+#    docker-compose.override.yml so we never patch upstream settings
+#    files in place.
+COPY deploy-local/production_ai.py /code/plane/settings/production_ai.py
+
+# 3. AI/ML deps. pgvector pulls in psycopg adapter for the VECTOR type,
+#    openai for embeddings, anthropic for Claude, tiktoken for token
+#    accounting, django-encrypted-model-fields for storing API keys
+#    at rest. Pinned to current major versions to avoid surprise
+#    breakage; bumping is intentional.
+RUN pip install --no-cache-dir \
+    pgvector==0.3.6 \
+    openai==1.54.4 \
+    anthropic==0.39.0 \
+    tiktoken==0.8.0 \
+    django-encrypted-model-fields==0.6.5
+
+# Default settings module — overridable per-service via env.
+ENV DJANGO_SETTINGS_MODULE=plane.settings.production_ai

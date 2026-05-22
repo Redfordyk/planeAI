@@ -1,0 +1,33 @@
+# Local overrides on top of deploy-local/docker-compose.yml
+#
+# 1. plane-db — swap default postgres:15.7-alpine for the pgvector image
+#    pinned to 0.8.2 (TZ 0.4 / CVE-2026-3172 fix).
+# 2. api / worker / beat-worker / migrator — use our custom image that
+#    bakes in the `ai` Django app and ML deps (TZ 0.5). Same image
+#    everywhere so Celery tasks and hooks defined in `ai` are visible
+#    to all backend services. DJANGO_SETTINGS_MODULE points at the
+#    settings shim that appends `ai` to INSTALLED_APPS.
+
+services:
+  plane-db:
+    image: pgvector/pgvector:0.8.2-pg15
+
+  api:
+    image: plane-backend-ai:local
+    environment:
+      DJANGO_SETTINGS_MODULE: plane.settings.production_ai
+
+  worker:
+    image: plane-backend-ai:local
+    environment:
+      DJANGO_SETTINGS_MODULE: plane.settings.production_ai
+
+  beat-worker:
+    image: plane-backend-ai:local
+    environment:
+      DJANGO_SETTINGS_MODULE: plane.settings.production_ai
+
+  migrator:
+    image: plane-backend-ai:local
+    environment:
+      DJANGO_SETTINGS_MODULE: plane.settings.production_ai
