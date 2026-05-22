@@ -1,0 +1,14 @@
+{
+  "name": "planeai-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Playwright end-to-end suite for the planeAI search panel (TZ 2.8). Lives outside apps/web so it never gets bundled into Plane's frontend build.",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "install-browsers": "playwright install --with-deps chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.49.0"
+  }
+}
