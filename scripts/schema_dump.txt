@@ -1,0 +1,1451 @@
+# === ALL INSTALLED APPS / MODELS ===
+
+[auth]  (django.contrib.auth)
+  - Group
+  - Permission
+
+[contenttypes]  (django.contrib.contenttypes)
+  - ContentType
+
+[db]  (plane.db)
+  - APIActivityLog
+  - APIToken
+  - Account
+  - AnalyticView
+  - CommentReaction
+  - Cycle
+  - CycleIssue
+  - CycleUserProperties
+  - DeployBoard
+  - Description
+  - DescriptionVersion
+  - Device
+  - DeviceSession
+  - DraftIssue
+  - DraftIssueAssignee
+  - DraftIssueCycle
+  - DraftIssueLabel
+  - DraftIssueModule
+  - EmailNotificationLog
+  - Estimate
+  - EstimatePoint
+  - ExporterHistory
+  - FileAsset
+  - GithubCommentSync
+  - GithubIssueSync
+  - GithubRepository
+  - GithubRepositorySync
+  - Importer
+  - Intake
+  - IntakeIssue
+  - Integration
+  - Issue
+  - IssueActivity
+  - IssueAssignee
+  - IssueAttachment
+  - IssueBlocker
+  - IssueComment
+  - IssueDescriptionVersion
+  - IssueLabel
+  - IssueLink
+  - IssueMention
+  - IssueReaction
+  - IssueRelation
+  - IssueSequence
+  - IssueSubscriber
+  - IssueType
+  - IssueVersion
+  - IssueView
+  - IssueVote
+  - Label
+  - Module
+  - ModuleIssue
+  - ModuleLink
+  - ModuleMember
+  - ModuleUserProperties
+  - Notification
+  - Page
+  - PageLabel
+  - PageLog
+  - PageVersion
+  - Profile
+  - Project
+  - ProjectDeployBoard
+  - ProjectIdentifier
+  - ProjectIssueType
+  - ProjectMember
+  - ProjectMemberInvite
+  - ProjectPage
+  - ProjectPublicMember
+  - ProjectUserProperty
+  - ProjectWebhook
+  - Session
+  - SlackProjectSync
+  - SocialLoginConnection
+  - State
+  - Sticky
+  - Team
+  - User
+  - UserFavorite
+  - UserNotificationPreference
+  - UserRecentVisit
+  - Webhook
+  - WebhookLog
+  - Workspace
+  - WorkspaceHomePreference
+  - WorkspaceIntegration
+  - WorkspaceMember
+  - WorkspaceMemberInvite
+  - WorkspaceTheme
+  - WorkspaceUserLink
+  - WorkspaceUserPreference
+  - WorkspaceUserProperties
+
+[django_celery_beat]  (django_celery_beat)
+  - ClockedSchedule
+  - CrontabSchedule
+  - IntervalSchedule
+  - PeriodicTask
+  - PeriodicTasks
+  - SolarSchedule
+
+[license]  (plane.license)
+  - ChangeLog
+  - Instance
+  - InstanceAdmin
+  - InstanceConfiguration
+
+[sessions]  (django.contrib.sessions)
+  - Session
+
+
+# === CANDIDATE MODELS (matching ТЗ 0.2 keywords) ===
+
+=== db.CommentReaction (db_table=comment_reactions) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  actor: ForeignKey -> db.User
+  comment: ForeignKey -> db.IssueComment
+  reaction: TextField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'actor->db.User', 'comment->db.IssueComment']
+
+=== db.CycleIssue (db_table=cycle_issues) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  issue: ForeignKey -> db.Issue
+  cycle: ForeignKey -> db.Cycle
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'issue->db.Issue', 'cycle->db.Cycle']
+
+=== db.DraftIssue (db_table=draft_issues) ===
+  assets: ForeignKey -> db.FileAsset
+  draft_issue_assignee: ForeignKey -> db.DraftIssueAssignee
+  draft_label_issue: ForeignKey -> db.DraftIssueLabel
+  draft_issue_module: ForeignKey -> db.DraftIssueModule
+  draft_issue_cycle: ForeignKey -> db.DraftIssueCycle
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  project: ForeignKey -> db.Project
+  parent: ForeignKey -> db.Issue
+  state: ForeignKey -> db.State
+  estimate_point: ForeignKey -> db.EstimatePoint
+  name: CharField
+  description_json: JSONField
+  description_html: TextField
+  description_stripped: TextField
+  description_binary: BinaryField
+  priority: CharField
+  start_date: DateField
+  target_date: DateField
+  sort_order: FloatField
+  completed_at: DateTimeField
+  external_source: CharField
+  external_id: CharField
+  type: ForeignKey -> db.IssueType
+  assignees: ManyToManyField -> db.User
+  labels: ManyToManyField -> db.Label
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : ['name(CharField)', 'description_html(TextField)', 'description_stripped(TextField)', 'description_binary(BinaryField)']
+  other FKs (top) : ['assets->db.FileAsset', 'draft_issue_assignee->db.DraftIssueAssignee', 'draft_label_issue->db.DraftIssueLabel', 'draft_issue_module->db.DraftIssueModule', 'draft_issue_cycle->db.DraftIssueCycle', 'created_by->db.User', 'updated_by->db.User', 'parent->db.Issue']
+
+=== db.DraftIssueAssignee (db_table=draft_issue_assignees) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  project: ForeignKey -> db.Project
+  draft_issue: ForeignKey -> db.DraftIssue
+  assignee: ForeignKey -> db.User
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'draft_issue->db.DraftIssue', 'assignee->db.User']
+
+=== db.DraftIssueCycle (db_table=draft_issue_cycles) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  project: ForeignKey -> db.Project
+  draft_issue: ForeignKey -> db.DraftIssue
+  cycle: ForeignKey -> db.Cycle
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'draft_issue->db.DraftIssue', 'cycle->db.Cycle']
+
+=== db.DraftIssueLabel (db_table=draft_issue_labels) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  project: ForeignKey -> db.Project
+  draft_issue: ForeignKey -> db.DraftIssue
+  label: ForeignKey -> db.Label
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'draft_issue->db.DraftIssue', 'label->db.Label']
+
+=== db.DraftIssueModule (db_table=draft_issue_modules) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  project: ForeignKey -> db.Project
+  module: ForeignKey -> db.Module
+  draft_issue: ForeignKey -> db.DraftIssue
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'module->db.Module', 'draft_issue->db.DraftIssue']
+
+=== db.GithubCommentSync (db_table=github_comment_syncs) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  repo_comment_id: BigIntegerField
+  comment: ForeignKey -> db.IssueComment
+  issue_sync: ForeignKey -> db.GithubIssueSync
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'comment->db.IssueComment', 'issue_sync->db.GithubIssueSync']
+
+=== db.GithubIssueSync (db_table=github_issue_syncs) ===
+  comment_syncs: ForeignKey -> db.GithubCommentSync
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  repo_issue_id: BigIntegerField
+  github_issue_id: BigIntegerField
+  issue_url: CharField
+  issue: ForeignKey -> db.Issue
+  repository_sync: ForeignKey -> db.GithubRepositorySync
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['comment_syncs->db.GithubCommentSync', 'created_by->db.User', 'updated_by->db.User', 'issue->db.Issue', 'repository_sync->db.GithubRepositorySync']
+
+=== db.IntakeIssue (db_table=intake_issues) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  intake: ForeignKey -> db.Intake
+  issue: ForeignKey -> db.Issue
+  status: IntegerField
+  snoozed_till: DateTimeField
+  duplicate_to: ForeignKey -> db.Issue
+  source: CharField
+  source_email: TextField
+  external_source: CharField
+  external_id: CharField
+  extra: JSONField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'intake->db.Intake', 'issue->db.Issue', 'duplicate_to->db.Issue']
+
+=== db.Issue (db_table=issues) ===
+  assets: ForeignKey -> db.FileAsset
+  parent_issue: ForeignKey -> db.Issue
+  blocker_issues: ForeignKey -> db.IssueBlocker
+  blocked_issues: ForeignKey -> db.IssueBlocker
+  issue_relation: ForeignKey -> db.IssueRelation
+  issue_related: ForeignKey -> db.IssueRelation
+  issue_mention: ForeignKey -> db.IssueMention
+  issue_assignee: ForeignKey -> db.IssueAssignee
+  issue_link: ForeignKey -> db.IssueLink
+  issue_attachment: ForeignKey -> db.IssueAttachment
+  issue_activity: ForeignKey -> db.IssueActivity
+  issue_comments: ForeignKey -> db.IssueComment
+  label_issue: ForeignKey -> db.IssueLabel
+  issue_sequence: ForeignKey -> db.IssueSequence
+  issue_subscribers: ForeignKey -> db.IssueSubscriber
+  issue_reactions: ForeignKey -> db.IssueReaction
+  votes: ForeignKey -> db.IssueVote
+  versions: ForeignKey -> db.IssueVersion
+  description_versions: ForeignKey -> db.IssueDescriptionVersion
+  issue_cycle: ForeignKey -> db.CycleIssue
+  draft_parent_issue: ForeignKey -> db.DraftIssue
+  issue_intake: ForeignKey -> db.IntakeIssue
+  intake_duplicate: ForeignKey -> db.IntakeIssue
+  github_syncs: ForeignKey -> db.GithubIssueSync
+  issue_module: ForeignKey -> db.ModuleIssue
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  parent: ForeignKey -> db.Issue
+  state: ForeignKey -> db.State
+  point: IntegerField
+  estimate_point: ForeignKey -> db.EstimatePoint
+  name: CharField
+  description_json: JSONField
+  description_html: TextField
+  description_stripped: TextField
+  description_binary: BinaryField
+  priority: CharField
+  start_date: DateField
+  target_date: DateField
+  sequence_id: IntegerField
+  sort_order: FloatField
+  completed_at: DateTimeField
+  archived_at: DateField
+  is_draft: BooleanField
+  external_source: CharField
+  external_id: CharField
+  type: ForeignKey -> db.IssueType
+  assignees: ManyToManyField -> db.User
+  labels: ManyToManyField -> db.Label
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : ['name(CharField)', 'description_html(TextField)', 'description_stripped(TextField)', 'description_binary(BinaryField)']
+  other FKs (top) : ['assets->db.FileAsset', 'parent_issue->db.Issue', 'blocker_issues->db.IssueBlocker', 'blocked_issues->db.IssueBlocker', 'issue_relation->db.IssueRelation', 'issue_related->db.IssueRelation', 'issue_mention->db.IssueMention', 'issue_assignee->db.IssueAssignee']
+
+=== db.IssueActivity (db_table=issue_activities) ===
+  versions: ForeignKey -> db.IssueVersion
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  issue: ForeignKey -> db.Issue
+  verb: CharField
+  field: CharField
+  old_value: TextField
+  new_value: TextField
+  comment: TextField
+  attachments: ArrayField
+  issue_comment: ForeignKey -> db.IssueComment
+  actor: ForeignKey -> db.User
+  old_identifier: UUIDField
+  new_identifier: UUIDField
+  epoch: FloatField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['versions->db.IssueVersion', 'created_by->db.User', 'updated_by->db.User', 'issue->db.Issue', 'issue_comment->db.IssueComment', 'actor->db.User']
+
+=== db.IssueAssignee (db_table=issue_assignees) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  issue: ForeignKey -> db.Issue
+  assignee: ForeignKey -> db.User
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'issue->db.Issue', 'assignee->db.User']
+
+=== db.IssueAttachment (db_table=issue_attachments) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  attributes: JSONField
+  asset: FileField
+  issue: ForeignKey -> db.Issue
+  external_source: CharField
+  external_id: CharField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'issue->db.Issue']
+
+=== db.IssueBlocker (db_table=issue_blockers) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  block: ForeignKey -> db.Issue
+  blocked_by: ForeignKey -> db.Issue
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'block->db.Issue', 'blocked_by->db.Issue']
+
+=== db.IssueComment (db_table=issue_comments) ===
+  assets: ForeignKey -> db.FileAsset
+  issue_comment: ForeignKey -> db.IssueActivity
+  parent_issue_comment: ForeignKey -> db.IssueComment
+  comment_reactions: ForeignKey -> db.CommentReaction
+  comment_syncs: ForeignKey -> db.GithubCommentSync
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  comment_stripped: TextField
+  comment_json: JSONField
+  comment_html: TextField
+  description: OneToOneField -> db.Description
+  attachments: ArrayField
+  issue: ForeignKey -> db.Issue
+  actor: ForeignKey -> db.User
+  access: CharField
+  external_source: CharField
+  external_id: CharField
+  edited_at: DateTimeField
+  parent: ForeignKey -> db.IssueComment
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : ['comment_stripped(TextField)', 'comment_html(TextField)']
+  other FKs (top) : ['assets->db.FileAsset', 'issue_comment->db.IssueActivity', 'parent_issue_comment->db.IssueComment', 'comment_reactions->db.CommentReaction', 'comment_syncs->db.GithubCommentSync', 'created_by->db.User', 'updated_by->db.User', 'description->db.Description']
+
+=== db.IssueDescriptionVersion (db_table=issue_description_versions) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  issue: ForeignKey -> db.Issue
+  description_binary: BinaryField
+  description_html: TextField
+  description_stripped: TextField
+  description_json: JSONField
+  last_saved_at: DateTimeField
+  owned_by: ForeignKey -> db.User
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : ['description_binary(BinaryField)', 'description_html(TextField)', 'description_stripped(TextField)']
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'issue->db.Issue', 'owned_by->db.User']
+
+=== db.IssueLabel (db_table=issue_labels) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  issue: ForeignKey -> db.Issue
+  label: ForeignKey -> db.Label
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'issue->db.Issue', 'label->db.Label']
+
+=== db.IssueLink (db_table=issue_links) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  title: CharField
+  url: TextField
+  issue: ForeignKey -> db.Issue
+  metadata: JSONField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : ['title(CharField)']
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'issue->db.Issue']
+
+=== db.IssueMention (db_table=issue_mentions) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  issue: ForeignKey -> db.Issue
+  mention: ForeignKey -> db.User
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'issue->db.Issue', 'mention->db.User']
+
+=== db.IssueReaction (db_table=issue_reactions) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  actor: ForeignKey -> db.User
+  issue: ForeignKey -> db.Issue
+  reaction: TextField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'actor->db.User', 'issue->db.Issue']
+
+=== db.IssueRelation (db_table=issue_relations) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  issue: ForeignKey -> db.Issue
+  related_issue: ForeignKey -> db.Issue
+  relation_type: CharField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'issue->db.Issue', 'related_issue->db.Issue']
+
+=== db.IssueSequence (db_table=issue_sequences) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  issue: ForeignKey -> db.Issue
+  sequence: PositiveBigIntegerField
+  deleted: BooleanField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'issue->db.Issue']
+
+=== db.IssueSubscriber (db_table=issue_subscribers) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  issue: ForeignKey -> db.Issue
+  subscriber: ForeignKey -> db.User
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'issue->db.Issue', 'subscriber->db.User']
+
+=== db.IssueType (db_table=issue_types) ===
+  issue_type: ForeignKey -> db.Issue
+  draft_issue_type: ForeignKey -> db.DraftIssue
+  project_issue_types: ForeignKey -> db.ProjectIssueType
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  name: CharField
+  description: TextField
+  logo_props: JSONField
+  is_epic: BooleanField
+  is_default: BooleanField
+  is_active: BooleanField
+  level: FloatField
+  external_source: CharField
+  external_id: CharField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : —
+  content fields  : ['name(CharField)', 'description(TextField)']
+  other FKs (top) : ['issue_type->db.Issue', 'draft_issue_type->db.DraftIssue', 'project_issue_types->db.ProjectIssueType', 'created_by->db.User', 'updated_by->db.User']
+
+=== db.IssueVersion (db_table=issue_versions) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  parent: UUIDField
+  state: UUIDField
+  estimate_point: UUIDField
+  name: CharField
+  priority: CharField
+  start_date: DateField
+  target_date: DateField
+  assignees: ArrayField
+  sequence_id: IntegerField
+  labels: ArrayField
+  sort_order: FloatField
+  completed_at: DateTimeField
+  archived_at: DateField
+  is_draft: BooleanField
+  external_source: CharField
+  external_id: CharField
+  type: UUIDField
+  cycle: UUIDField
+  modules: ArrayField
+  properties: JSONField
+  meta: JSONField
+  last_saved_at: DateTimeField
+  issue: ForeignKey -> db.Issue
+  activity: ForeignKey -> db.IssueActivity
+  owned_by: ForeignKey -> db.User
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : ['name(CharField)']
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'issue->db.Issue', 'activity->db.IssueActivity', 'owned_by->db.User']
+
+=== db.IssueView (db_table=issue_views) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  project: ForeignKey -> db.Project
+  name: CharField
+  description: TextField
+  query: JSONField
+  filters: JSONField
+  display_filters: JSONField
+  display_properties: JSONField
+  rich_filters: JSONField
+  access: PositiveSmallIntegerField
+  sort_order: FloatField
+  logo_props: JSONField
+  owned_by: ForeignKey -> db.User
+  is_locked: BooleanField
+  archived_at: DateTimeField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : ['name(CharField)', 'description(TextField)']
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'owned_by->db.User']
+
+=== db.IssueVote (db_table=issue_votes) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  issue: ForeignKey -> db.Issue
+  actor: ForeignKey -> db.User
+  vote: IntegerField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'issue->db.Issue', 'actor->db.User']
+
+=== db.ModuleIssue (db_table=module_issues) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  module: ForeignKey -> db.Module
+  issue: ForeignKey -> db.Issue
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'module->db.Module', 'issue->db.Issue']
+
+=== db.ModuleMember (db_table=module_members) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  module: ForeignKey -> db.Module
+  member: ForeignKey -> db.User
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'module->db.Module', 'member->db.User']
+
+=== db.Page (db_table=pages) ===
+  assets: ForeignKey -> db.FileAsset
+  child_page: ForeignKey -> db.Page
+  page_log: ForeignKey -> db.PageLog
+  page_labels: ForeignKey -> db.PageLabel
+  project_pages: ForeignKey -> db.ProjectPage
+  page_versions: ForeignKey -> db.PageVersion
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  name: TextField
+  description_json: JSONField
+  description_binary: BinaryField
+  description_html: TextField
+  description_stripped: TextField
+  owned_by: ForeignKey -> db.User
+  access: PositiveSmallIntegerField
+  color: CharField
+  parent: ForeignKey -> db.Page
+  archived_at: DateField
+  is_locked: BooleanField
+  view_props: JSONField
+  logo_props: JSONField
+  is_global: BooleanField
+  moved_to_page: UUIDField
+  moved_to_project: UUIDField
+  sort_order: FloatField
+  external_id: CharField
+  external_source: CharField
+  labels: ManyToManyField -> db.Label
+  projects: ManyToManyField -> db.Project
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : —
+  content fields  : ['name(TextField)', 'description_binary(BinaryField)', 'description_html(TextField)', 'description_stripped(TextField)']
+  other FKs (top) : ['assets->db.FileAsset', 'child_page->db.Page', 'page_log->db.PageLog', 'page_labels->db.PageLabel', 'project_pages->db.ProjectPage', 'page_versions->db.PageVersion', 'created_by->db.User', 'updated_by->db.User']
+
+=== db.PageLabel (db_table=page_labels) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  label: ForeignKey -> db.Label
+  page: ForeignKey -> db.Page
+  workspace: ForeignKey -> db.Workspace
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : —
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'label->db.Label', 'page->db.Page']
+
+=== db.PageLog (db_table=page_logs) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  transaction: UUIDField
+  page: ForeignKey -> db.Page
+  entity_identifier: UUIDField
+  entity_name: CharField
+  entity_type: CharField
+  workspace: ForeignKey -> db.Workspace
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : —
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'page->db.Page']
+
+=== db.PageVersion (db_table=page_versions) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  page: ForeignKey -> db.Page
+  last_saved_at: DateTimeField
+  owned_by: ForeignKey -> db.User
+  description_binary: BinaryField
+  description_html: TextField
+  description_stripped: TextField
+  description_json: JSONField
+  sub_pages_data: JSONField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : —
+  content fields  : ['description_binary(BinaryField)', 'description_html(TextField)', 'description_stripped(TextField)']
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'page->db.Page', 'owned_by->db.User']
+
+=== db.Project (db_table=projects) ===
+  assets: ForeignKey -> db.FileAsset
+  project_projectmemberinvite: ForeignKey -> db.ProjectMemberInvite
+  project_projectmember: ForeignKey -> db.ProjectMember
+  project_identifier: OneToOneField -> db.ProjectIdentifier
+  project_projectdeployboard: ForeignKey -> db.ProjectDeployBoard
+  project_projectpublicmember: ForeignKey -> db.ProjectPublicMember
+  project_workspaceuserlink: ForeignKey -> db.WorkspaceUserLink
+  project_description: ForeignKey -> db.Description
+  project_descriptionversion: ForeignKey -> db.DescriptionVersion
+  project_state: ForeignKey -> db.State
+  project_issue: ForeignKey -> db.Issue
+  project_issueblocker: ForeignKey -> db.IssueBlocker
+  project_issuerelation: ForeignKey -> db.IssueRelation
+  project_issuemention: ForeignKey -> db.IssueMention
+  project_issueassignee: ForeignKey -> db.IssueAssignee
+  project_issuelink: ForeignKey -> db.IssueLink
+  project_issueattachment: ForeignKey -> db.IssueAttachment
+  project_issueactivity: ForeignKey -> db.IssueActivity
+  project_issuecomment: ForeignKey -> db.IssueComment
+  project_issuelabel: ForeignKey -> db.IssueLabel
+  project_issuesequence: ForeignKey -> db.IssueSequence
+  project_issuesubscriber: ForeignKey -> db.IssueSubscriber
+  project_issuereaction: ForeignKey -> db.IssueReaction
+  project_commentreaction: ForeignKey -> db.CommentReaction
+  project_issuevote: ForeignKey -> db.IssueVote
+  project_issueversion: ForeignKey -> db.IssueVersion
+  project_issuedescriptionversion: ForeignKey -> db.IssueDescriptionVersion
+  project_projectuserproperty: ForeignKey -> db.ProjectUserProperty
+  project_cycle: ForeignKey -> db.Cycle
+  project_cycleissue: ForeignKey -> db.CycleIssue
+  project_cycleuserproperties: ForeignKey -> db.CycleUserProperties
+  project_deployboard: ForeignKey -> db.DeployBoard
+  project_draftissue: ForeignKey -> db.DraftIssue
+  project_draftissueassignee: ForeignKey -> db.DraftIssueAssignee
+  project_draftissuelabel: ForeignKey -> db.DraftIssueLabel
+  project_draftissuemodule: ForeignKey -> db.DraftIssueModule
+  project_draftissuecycle: ForeignKey -> db.DraftIssueCycle
+  project_estimate: ForeignKey -> db.Estimate
+  project_estimatepoint: ForeignKey -> db.EstimatePoint
+  project_importer: ForeignKey -> db.Importer
+  project_intake: ForeignKey -> db.Intake
+  project_intakeissue: ForeignKey -> db.IntakeIssue
+  project_githubrepository: ForeignKey -> db.GithubRepository
+  project_githubrepositorysync: ForeignKey -> db.GithubRepositorySync
+  project_githubissuesync: ForeignKey -> db.GithubIssueSync
+  project_githubcommentsync: ForeignKey -> db.GithubCommentSync
+  project_slackprojectsync: ForeignKey -> db.SlackProjectSync
+  project_module: ForeignKey -> db.Module
+  project_modulemember: ForeignKey -> db.ModuleMember
+  project_moduleissue: ForeignKey -> db.ModuleIssue
+  project_modulelink: ForeignKey -> db.ModuleLink
+  project_moduleuserproperties: ForeignKey -> db.ModuleUserProperties
+  notifications: ForeignKey -> db.Notification
+  project_notification_preferences: ForeignKey -> db.UserNotificationPreference
+  pages: ManyToManyField -> db.Page
+  project_pages: ForeignKey -> db.ProjectPage
+  project_issueview: ForeignKey -> db.IssueView
+  project_projectwebhook: ForeignKey -> db.ProjectWebhook
+  project_userfavorite: ForeignKey -> db.UserFavorite
+  project_projectissuetype: ForeignKey -> db.ProjectIssueType
+  project_userrecentvisit: ForeignKey -> db.UserRecentVisit
+  project_label: ForeignKey -> db.Label
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  name: CharField
+  description: TextField
+  description_text: JSONField
+  description_html: JSONField
+  network: PositiveSmallIntegerField
+  workspace: ForeignKey -> db.Workspace
+  identifier: CharField
+  default_assignee: ForeignKey -> db.User
+  project_lead: ForeignKey -> db.User
+  emoji: CharField
+  icon_prop: JSONField
+  module_view: BooleanField
+  cycle_view: BooleanField
+  issue_views_view: BooleanField
+  page_view: BooleanField
+  intake_view: BooleanField
+  is_time_tracking_enabled: BooleanField
+  is_issue_type_enabled: BooleanField
+  guest_view_all_features: BooleanField
+  cover_image: TextField
+  cover_image_asset: ForeignKey -> db.FileAsset
+  estimate: ForeignKey -> db.Estimate
+  archive_in: IntegerField
+  close_in: IntegerField
+  logo_props: JSONField
+  default_state: ForeignKey -> db.State
+  archived_at: DateTimeField
+  timezone: CharField
+  external_source: CharField
+  external_id: CharField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : —
+  content fields  : ['name(CharField)', 'description(TextField)', 'description_html(JSONField)']
+  other FKs (top) : ['assets->db.FileAsset', 'project_projectmemberinvite->db.ProjectMemberInvite', 'project_projectmember->db.ProjectMember', 'project_identifier->db.ProjectIdentifier', 'project_projectdeployboard->db.ProjectDeployBoard', 'project_projectpublicmember->db.ProjectPublicMember', 'project_workspaceuserlink->db.WorkspaceUserLink', 'project_description->db.Description']
+
+=== db.ProjectDeployBoard (db_table=project_deploy_boards) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  anchor: CharField
+  comments: BooleanField
+  reactions: BooleanField
+  intake: ForeignKey -> db.Intake
+  votes: BooleanField
+  views: JSONField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'intake->db.Intake']
+
+=== db.ProjectIdentifier (db_table=project_identifiers) ===
+  id: BigAutoField
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  workspace: ForeignKey -> db.Workspace
+  project: OneToOneField -> db.Project
+  name: CharField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : ['name(CharField)']
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User']
+
+=== db.ProjectIssueType (db_table=project_issue_types) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  issue_type: ForeignKey -> db.IssueType
+  level: PositiveIntegerField
+  is_default: BooleanField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'issue_type->db.IssueType']
+
+=== db.ProjectMember (db_table=project_members) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  member: ForeignKey -> db.User
+  comment: TextField
+  role: PositiveSmallIntegerField
+  view_props: JSONField
+  default_props: JSONField
+  preferences: JSONField
+  sort_order: FloatField
+  is_active: BooleanField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'member->db.User']
+
+=== db.ProjectMemberInvite (db_table=project_member_invites) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  email: CharField
+  accepted: BooleanField
+  token: CharField
+  message: TextField
+  responded_at: DateTimeField
+  role: PositiveSmallIntegerField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User']
+
+=== db.ProjectPage (db_table=project_pages) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  page: ForeignKey -> db.Page
+  workspace: ForeignKey -> db.Workspace
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'page->db.Page']
+
+=== db.ProjectPublicMember (db_table=project_public_members) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  member: ForeignKey -> db.User
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'member->db.User']
+
+=== db.ProjectUserProperty (db_table=project_user_properties) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  user: ForeignKey -> db.User
+  filters: JSONField
+  display_filters: JSONField
+  display_properties: JSONField
+  rich_filters: JSONField
+  preferences: JSONField
+  sort_order: FloatField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'user->db.User']
+
+=== db.ProjectWebhook (db_table=project_webhooks) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  webhook: ForeignKey -> db.Webhook
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'webhook->db.Webhook']
+
+=== db.SlackProjectSync (db_table=slack_project_syncs) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  project: ForeignKey -> db.Project
+  workspace: ForeignKey -> db.Workspace
+  access_token: CharField
+  scopes: TextField
+  bot_user_id: CharField
+  webhook_url: CharField
+  data: JSONField
+  team_id: CharField
+  team_name: CharField
+  workspace_integration: ForeignKey -> db.WorkspaceIntegration
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'workspace_integration->db.WorkspaceIntegration']
+
+=== db.Workspace (db_table=workspaces) ===
+  analytics: ForeignKey -> db.AnalyticView
+  api_tokens: ForeignKey -> db.APIToken
+  assets: ForeignKey -> db.FileAsset
+  workspace_project: ForeignKey -> db.Project
+  workspace_projectmemberinvite: ForeignKey -> db.ProjectMemberInvite
+  workspace_projectmember: ForeignKey -> db.ProjectMember
+  project_identifiers: ForeignKey -> db.ProjectIdentifier
+  workspace_projectdeployboard: ForeignKey -> db.ProjectDeployBoard
+  workspace_projectpublicmember: ForeignKey -> db.ProjectPublicMember
+  workspace_member: ForeignKey -> db.WorkspaceMember
+  workspace_member_invite: ForeignKey -> db.WorkspaceMemberInvite
+  workspace_team: ForeignKey -> db.Team
+  themes: ForeignKey -> db.WorkspaceTheme
+  workspace_user_properties: ForeignKey -> db.WorkspaceUserProperties
+  workspace_workspaceuserlink: ForeignKey -> db.WorkspaceUserLink
+  workspace_user_home_preferences: ForeignKey -> db.WorkspaceHomePreference
+  workspace_user_preferences: ForeignKey -> db.WorkspaceUserPreference
+  workspace_description: ForeignKey -> db.Description
+  workspace_descriptionversion: ForeignKey -> db.DescriptionVersion
+  workspace_state: ForeignKey -> db.State
+  workspace_issue: ForeignKey -> db.Issue
+  workspace_issueblocker: ForeignKey -> db.IssueBlocker
+  workspace_issuerelation: ForeignKey -> db.IssueRelation
+  workspace_issuemention: ForeignKey -> db.IssueMention
+  workspace_issueassignee: ForeignKey -> db.IssueAssignee
+  workspace_issuelink: ForeignKey -> db.IssueLink
+  workspace_issueattachment: ForeignKey -> db.IssueAttachment
+  workspace_issueactivity: ForeignKey -> db.IssueActivity
+  workspace_issuecomment: ForeignKey -> db.IssueComment
+  workspace_issuelabel: ForeignKey -> db.IssueLabel
+  workspace_issuesequence: ForeignKey -> db.IssueSequence
+  workspace_issuesubscriber: ForeignKey -> db.IssueSubscriber
+  workspace_issuereaction: ForeignKey -> db.IssueReaction
+  workspace_commentreaction: ForeignKey -> db.CommentReaction
+  workspace_issuevote: ForeignKey -> db.IssueVote
+  workspace_issueversion: ForeignKey -> db.IssueVersion
+  workspace_issuedescriptionversion: ForeignKey -> db.IssueDescriptionVersion
+  workspace_projectuserproperty: ForeignKey -> db.ProjectUserProperty
+  workspace_cycle: ForeignKey -> db.Cycle
+  workspace_cycleissue: ForeignKey -> db.CycleIssue
+  workspace_cycleuserproperties: ForeignKey -> db.CycleUserProperties
+  workspace_deployboard: ForeignKey -> db.DeployBoard
+  workspace_draftissue: ForeignKey -> db.DraftIssue
+  workspace_draftissueassignee: ForeignKey -> db.DraftIssueAssignee
+  workspace_draftissuelabel: ForeignKey -> db.DraftIssueLabel
+  workspace_draftissuemodule: ForeignKey -> db.DraftIssueModule
+  workspace_draftissuecycle: ForeignKey -> db.DraftIssueCycle
+  workspace_estimate: ForeignKey -> db.Estimate
+  workspace_estimatepoint: ForeignKey -> db.EstimatePoint
+  workspace_exporters: ForeignKey -> db.ExporterHistory
+  workspace_importer: ForeignKey -> db.Importer
+  workspace_intake: ForeignKey -> db.Intake
+  workspace_intakeissue: ForeignKey -> db.IntakeIssue
+  workspace_integrations: ForeignKey -> db.WorkspaceIntegration
+  workspace_githubrepository: ForeignKey -> db.GithubRepository
+  workspace_githubrepositorysync: ForeignKey -> db.GithubRepositorySync
+  workspace_githubissuesync: ForeignKey -> db.GithubIssueSync
+  workspace_githubcommentsync: ForeignKey -> db.GithubCommentSync
+  workspace_slackprojectsync: ForeignKey -> db.SlackProjectSync
+  workspace_module: ForeignKey -> db.Module
+  workspace_modulemember: ForeignKey -> db.ModuleMember
+  workspace_moduleissue: ForeignKey -> db.ModuleIssue
+  workspace_modulelink: ForeignKey -> db.ModuleLink
+  workspace_moduleuserproperties: ForeignKey -> db.ModuleUserProperties
+  notifications: ForeignKey -> db.Notification
+  workspace_notification_preferences: ForeignKey -> db.UserNotificationPreference
+  pages: ForeignKey -> db.Page
+  workspace_page_log: ForeignKey -> db.PageLog
+  workspace_page_label: ForeignKey -> db.PageLabel
+  project_pages: ForeignKey -> db.ProjectPage
+  page_versions: ForeignKey -> db.PageVersion
+  workspace_issueview: ForeignKey -> db.IssueView
+  workspace_webhooks: ForeignKey -> db.Webhook
+  webhook_logs: ForeignKey -> db.WebhookLog
+  workspace_projectwebhook: ForeignKey -> db.ProjectWebhook
+  workspace_userfavorite: ForeignKey -> db.UserFavorite
+  issue_types: ForeignKey -> db.IssueType
+  workspace_projectissuetype: ForeignKey -> db.ProjectIssueType
+  workspace_userrecentvisit: ForeignKey -> db.UserRecentVisit
+  workspace_label: ForeignKey -> db.Label
+  stickies: ForeignKey -> db.Sticky
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  name: CharField
+  logo: TextField
+  logo_asset: ForeignKey -> db.FileAsset
+  owner: ForeignKey -> db.User
+  slug: SlugField
+  organization_size: CharField
+  timezone: CharField
+  background_color: CharField
+  --- summary ---
+  FK -> Workspace : —
+  FK -> Project   : ['workspace_project']
+  content fields  : ['name(CharField)']
+  other FKs (top) : ['analytics->db.AnalyticView', 'api_tokens->db.APIToken', 'assets->db.FileAsset', 'workspace_projectmemberinvite->db.ProjectMemberInvite', 'workspace_projectmember->db.ProjectMember', 'project_identifiers->db.ProjectIdentifier', 'workspace_projectdeployboard->db.ProjectDeployBoard', 'workspace_projectpublicmember->db.ProjectPublicMember']
+
+=== db.WorkspaceHomePreference (db_table=workspace_home_preferences) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  user: ForeignKey -> db.User
+  key: CharField
+  is_enabled: BooleanField
+  config: JSONField
+  sort_order: FloatField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : —
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'user->db.User']
+
+=== db.WorkspaceIntegration (db_table=workspace_integrations) ===
+  github_syncs: ForeignKey -> db.GithubRepositorySync
+  slack_syncs: ForeignKey -> db.SlackProjectSync
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  actor: ForeignKey -> db.User
+  integration: ForeignKey -> db.Integration
+  api_token: ForeignKey -> db.APIToken
+  metadata: JSONField
+  config: JSONField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : —
+  content fields  : —
+  other FKs (top) : ['github_syncs->db.GithubRepositorySync', 'slack_syncs->db.SlackProjectSync', 'created_by->db.User', 'updated_by->db.User', 'actor->db.User', 'integration->db.Integration', 'api_token->db.APIToken']
+
+=== db.WorkspaceMember (db_table=workspace_members) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  member: ForeignKey -> db.User
+  role: PositiveSmallIntegerField
+  company_role: TextField
+  view_props: JSONField
+  default_props: JSONField
+  issue_props: JSONField
+  is_active: BooleanField
+  getting_started_checklist: JSONField
+  tips: JSONField
+  explored_features: JSONField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : —
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'member->db.User']
+
+=== db.WorkspaceMemberInvite (db_table=workspace_member_invites) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  email: CharField
+  accepted: BooleanField
+  token: CharField
+  message: TextField
+  responded_at: DateTimeField
+  role: PositiveSmallIntegerField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : —
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User']
+
+=== db.WorkspaceTheme (db_table=workspace_themes) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  name: CharField
+  actor: ForeignKey -> db.User
+  colors: JSONField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : —
+  content fields  : ['name(CharField)']
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'actor->db.User']
+
+=== db.WorkspaceUserLink (db_table=workspace_user_links) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  project: ForeignKey -> db.Project
+  title: CharField
+  url: TextField
+  metadata: JSONField
+  owner: ForeignKey -> db.User
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : ['project']
+  content fields  : ['title(CharField)']
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'owner->db.User']
+
+=== db.WorkspaceUserPreference (db_table=workspace_user_preferences) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  user: ForeignKey -> db.User
+  key: CharField
+  is_pinned: BooleanField
+  sort_order: FloatField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : —
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'user->db.User']
+
+=== db.WorkspaceUserProperties (db_table=workspace_user_properties) ===
+  created_at: DateTimeField
+  updated_at: DateTimeField
+  created_by: ForeignKey -> db.User
+  updated_by: ForeignKey -> db.User
+  deleted_at: DateTimeField
+  id: UUIDField
+  workspace: ForeignKey -> db.Workspace
+  user: ForeignKey -> db.User
+  filters: JSONField
+  display_filters: JSONField
+  display_properties: JSONField
+  rich_filters: JSONField
+  navigation_project_limit: IntegerField
+  navigation_control_preference: CharField
+  --- summary ---
+  FK -> Workspace : ['workspace']
+  FK -> Project   : —
+  content fields  : —
+  other FKs (top) : ['created_by->db.User', 'updated_by->db.User', 'user->db.User']
