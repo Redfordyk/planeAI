@@ -30,7 +30,10 @@ RUN pip install --no-cache-dir \
     openai==1.54.4 \
     anthropic==0.39.0 \
     tiktoken==0.8.0 \
-    django-encrypted-model-fields==0.6.5
+    django-encrypted-model-fields==0.6.5 \
+    pytest==8.3.4 \
+    pytest-django==4.9.0 \
+    pytest-asyncio==0.24.0
 
 # Default settings module — overridable per-service via env.
 ENV DJANGO_SETTINGS_MODULE=plane.settings.production_ai
