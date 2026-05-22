@@ -1,0 +1,84 @@
+name: planeAI deploy → staging
+
+# Triggers manually OR after planeAI CI succeeds on main. Pulls the
+# SHA-tagged image on the staging server and rolls the backend
+# services. Requires repo secrets (set under Settings → Secrets and
+# variables → Actions):
+#
+#   STAGING_SSH_HOST   — e.g. staging.example.com
+#   STAGING_SSH_USER   — e.g. deploy
+#   STAGING_SSH_KEY    — private key, full PEM contents
+#   STAGING_DEPLOY_DIR — absolute path on staging that contains
+#                        deploy-local/ (cloned from this repo)
+#
+# If those secrets are not set, this workflow is a no-op (the steps
+# will fail loudly so it's obvious).
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Image tag (12-char SHA) to deploy
+        required: true
+  workflow_run:
+    workflows: ["planeAI CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "sha=${{ github.event.inputs.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "sha=$(echo ${{ github.event.workflow_run.head_sha }} | cut -c1-12)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.STAGING_SSH_HOST }}
+          username: ${{ secrets.STAGING_SSH_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd "${{ secrets.STAGING_DEPLOY_DIR }}"
+            # Pin the override file to the SHA being rolled out.
+            OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+            export PLANE_AI_IMAGE="ghcr.io/${OWNER}/plane-backend-ai:${{ steps.tag.outputs.sha }}"
+            echo "rolling out $PLANE_AI_IMAGE"
+            docker pull "$PLANE_AI_IMAGE"
+            # Substitute the image in the override file in-place. The
+            # override on staging uses ${PLANE_AI_IMAGE} (see
+            # docker-compose.staging.yml), so just exporting is enough.
+            docker compose -p plane-staging \
+              -f deploy-local/docker-compose.yml \
+              -f deploy-local/docker-compose.staging.yml \
+              up -d migrator
+            # Wait for migrator to exit cleanly.
+            for i in $(seq 1 60); do
+              status=$(docker inspect -f '{{.State.Status}}' plane-staging-migrator-1 || echo missing)
+              if [ "$status" = "exited" ]; then
+                code=$(docker inspect -f '{{.State.ExitCode}}' plane-staging-migrator-1)
+                [ "$code" = "0" ] || { echo "migrator failed ($code)"; exit 1; }
+                break
+              fi
+              sleep 5
+            done
+            # Roll backend services to the new image.
+            docker compose -p plane-staging \
+              -f deploy-local/docker-compose.yml \
+              -f deploy-local/docker-compose.staging.yml \
+              up -d api worker beat-worker
+            # Smoke: web UI must answer.
+            curl -fsS -o /dev/null -w "HTTP %{http_code}\n" http://localhost:${STAGING_HTTP_PORT:-80}/

@@ -40,6 +40,14 @@ pnpm-debug.log*
 .env.development.local
 .env.test.local
 .env.production.local
+# planeAI: anything resembling a real secret store
+.env.staging
+.env.prod
+.env.*.local
+secrets/
+*.pem
+*.key
+!*.pub.key
 
 # Vercel
 .vercel

@@ -1,4 +1,12 @@
+<!--
+planeAI fork — AI add-on over self-hosted Plane (Community Edition).
+See CLAUDE.md for project context, and CICD.md / IMAGE.md for how this
+repo differs from upstream makeplane/plane. CI status:
+[![planeAI CI](https://github.com/Redfordyk/planeAI/actions/workflows/planeai-ci.yml/badge.svg?branch=main)](https://github.com/Redfordyk/planeAI/actions/workflows/planeai-ci.yml)
+-->
 <br /><br />
+
+[![planeAI CI](https://github.com/Redfordyk/planeAI/actions/workflows/planeai-ci.yml/badge.svg?branch=main)](https://github.com/Redfordyk/planeAI/actions/workflows/planeai-ci.yml)
 
 <p align="center">
 <a href="https://plane.so">

@@ -91,7 +91,7 @@ def filter_ids_by_acl(work_item_ids: Iterable[UUID | str], user) -> list[str]:
     if not ids:
         return []
 
-    from plane.db.models import Issue, ProjectMember, WorkspaceMember
+    from plane.db.models import Issue, WorkspaceMember
 
     # 1. Direct write — role >= MEMBER on the issue's project.
     direct_writable = set(

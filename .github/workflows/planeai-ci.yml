@@ -1,0 +1,141 @@
+name: planeAI CI
+
+# Runs on PRs and on every push that touches AI-add-on code or its
+# deploy bundle. Upstream Plane files have their own workflows already
+# (build-branch.yml, codeql.yml, ...); this workflow is scoped to the
+# AI layer so we don't double-build their backend on unrelated diffs.
+
+on:
+  pull_request:
+    paths:
+      - "ai/**"
+      - "scripts/**"
+      - "deploy-local/**"
+      - "Dockerfile.ai"
+      - ".github/workflows/planeai-*.yml"
+  push:
+    branches: [main, preview]
+    paths:
+      - "ai/**"
+      - "scripts/**"
+      - "deploy-local/**"
+      - "Dockerfile.ai"
+      - ".github/workflows/planeai-*.yml"
+
+permissions:
+  contents: read
+  packages: write   # for ghcr.io push on main
+
+concurrency:
+  group: planeai-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install ruff==0.7.4
+      - run: ruff check ai/ scripts/
+
+  smoke:
+    # Integration smoke that brings up the full Plane stack with our
+    # custom backend image and pgvector 0.8.2, waits for migrations,
+    # then runs verify_schema + verify_acl against the live DB. This
+    # is the "real Postgres+pgvector test" called out in TZ 0.9 DoD.
+    # Proper pytest unit tests land in TZ 1.9.
+    name: smoke (full stack + verify_acl/schema)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build plane-backend-ai image
+        run: docker build -f Dockerfile.ai -t plane-backend-ai:local .
+
+      - name: Bring up stack
+        working-directory: deploy-local
+        run: |
+          cp .env.example .env
+          # Real values not needed for smoke. CHANGE_ME stays.
+          docker compose -p plane-ci up -d
+
+      - name: Wait for migrator to exit 0
+        run: |
+          set -e
+          for i in $(seq 1 80); do
+            status=$(docker inspect -f '{{.State.Status}}' plane-ci-migrator-1 2>/dev/null || echo missing)
+            if [ "$status" = "exited" ]; then
+              code=$(docker inspect -f '{{.State.ExitCode}}' plane-ci-migrator-1)
+              echo "migrator exited code=$code"
+              [ "$code" = "0" ] && exit 0 || exit 1
+            fi
+            sleep 8
+          done
+          echo "migrator did not exit in time"; docker compose -p plane-ci logs migrator | tail -100; exit 1
+
+      - name: verify_schema (introspection smoke)
+        run: |
+          docker cp scripts/verify_schema.py plane-ci-api-1:/code/plane/db/management/commands/verify_schema.py
+          docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T api python manage.py verify_schema > /dev/null
+
+      - name: verify_acl (real DB, 13 assertions)
+        run: |
+          docker cp scripts/verify_acl.py plane-ci-api-1:/code/plane/db/management/commands/verify_acl.py
+          docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T api python manage.py verify_acl
+
+      - name: pgvector version is >= 0.8.2
+        run: |
+          v=$(docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T -e PGPASSWORD=plane plane-db psql -U plane -d plane -tAc "SELECT extversion FROM pg_extension WHERE extname='vector';")
+          echo "vector=$v"
+          python3 -c "import sys; v=sys.argv[1].strip(); want=(0,8,2); got=tuple(int(x) for x in v.split('.')); sys.exit(0 if got>=want else 1)" "$v"
+
+      - name: Dump container statuses on failure
+        if: failure()
+        run: |
+          docker compose -p plane-ci -f deploy-local/docker-compose.yml ps -a
+          docker compose -p plane-ci -f deploy-local/docker-compose.yml logs --tail 120
+
+      - name: Tear down
+        if: always()
+        working-directory: deploy-local
+        run: docker compose -p plane-ci down -v
+
+  publish:
+    # Tags every build with the commit SHA so we can roll back to a
+    # specific commit by image tag (TZ 6.5). Latest moves only on the
+    # mainline branch.
+    name: publish image (ghcr.io)
+    needs: [lint, smoke]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/preview')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image refs
+        id: refs
+        run: |
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "image=ghcr.io/${OWNER}/plane-backend-ai" >> "$GITHUB_OUTPUT"
+          echo "sha=$(echo ${{ github.sha }} | cut -c1-12)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build + push (sha + branch tags)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.ai
+          push: true
+          tags: |
+            ${{ steps.refs.outputs.image }}:${{ steps.refs.outputs.sha }}
+            ${{ steps.refs.outputs.image }}:${{ github.ref_name }}

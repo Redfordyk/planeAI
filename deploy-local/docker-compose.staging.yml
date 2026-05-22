@@ -1,0 +1,36 @@
+# Staging-only delta on top of docker-compose.yml. Used INSTEAD of
+# docker-compose.override.yml on the staging host (the override is for
+# local dev only). Differences from prod-ish defaults:
+#
+# - api/worker/beat-worker/migrator use ${PLANE_AI_IMAGE} so the CD
+#   pipeline can swap to a specific SHA tag without editing this file.
+# - plane-db uses the same pgvector image we use locally.
+# - Listen ports default to 80/443 (prod-like). Override via env if
+#   the host is shared.
+#
+# DJANGO_SETTINGS_MODULE is pinned to the AI settings shim so the
+# `ai` Django app is registered in INSTALLED_APPS.
+
+services:
+  plane-db:
+    image: pgvector/pgvector:0.8.2-pg15
+
+  api:
+    image: ${PLANE_AI_IMAGE:-plane-backend-ai:local}
+    environment:
+      DJANGO_SETTINGS_MODULE: plane.settings.production_ai
+
+  worker:
+    image: ${PLANE_AI_IMAGE:-plane-backend-ai:local}
+    environment:
+      DJANGO_SETTINGS_MODULE: plane.settings.production_ai
+
+  beat-worker:
+    image: ${PLANE_AI_IMAGE:-plane-backend-ai:local}
+    environment:
+      DJANGO_SETTINGS_MODULE: plane.settings.production_ai
+
+  migrator:
+    image: ${PLANE_AI_IMAGE:-plane-backend-ai:local}
+    environment:
+      DJANGO_SETTINGS_MODULE: plane.settings.production_ai
