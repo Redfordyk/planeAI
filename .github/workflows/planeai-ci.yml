@@ -65,6 +65,11 @@ jobs:
           # `CHANGE_ME` placeholders that don't match the hard-coded
           # plane:plane fallback inside docker-compose.yml.
           cp ../deployments/cli/community/variables.env .env
+          # FIELD_ENCRYPTION_KEY is required by django-encrypted-model-fields
+          # at module import time (ai.models pulls in EncryptedCharField).
+          # In CI we generate a throwaway key per run.
+          KEY=$(python ../scripts/gen_encryption_key.py)
+          echo "FIELD_ENCRYPTION_KEY=$KEY" >> .env
           docker compose -p plane-ci up -d
 
       - name: Wait for migrator to exit 0

@@ -16,18 +16,22 @@ services:
     image: plane-backend-ai:local
     environment:
       DJANGO_SETTINGS_MODULE: plane.settings.production_ai
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
 
   worker:
     image: plane-backend-ai:local
     environment:
       DJANGO_SETTINGS_MODULE: plane.settings.production_ai
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
 
   beat-worker:
     image: plane-backend-ai:local
     environment:
       DJANGO_SETTINGS_MODULE: plane.settings.production_ai
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
 
   migrator:
     image: plane-backend-ai:local
     environment:
       DJANGO_SETTINGS_MODULE: plane.settings.production_ai
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
