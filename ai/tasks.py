@@ -165,6 +165,28 @@ def reindex_source(self, workspace_id, project_id, source_type, source_id):
     )
 
 
+@shared_task(
+    name="ai.run_agent_on_workitem",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=30,
+    acks_late=False,
+)
+def run_agent_on_workitem(self, issue_id):
+    """TZ 5.1 — minimal entry point that the assignment/label trigger
+    enqueues. Full agent-loop body (RAG retrieval, allowed-tools agent
+    run, white-listed writes, audit log) is the deliverable of TZ 5.2;
+    this stub exists so the trigger has something to apply_async to
+    and tests can assert "exactly one task was scheduled" without
+    importing the worker module.
+
+    The stub does no Plane writes, so the self-loop guard isn't
+    exercised here — the guard is wired in :func:`ai.agent_triggers.
+    agent_acting`, ready for TZ 5.2 to use.
+    """
+    logger.info("run_agent_on_workitem: scheduled (stub) issue=%s", issue_id)
+
+
 @shared_task(name="ai.delete_chunks")
 def delete_chunks(source_type: str, source_id: str) -> int:
     """Remove all chunks for a deleted source object.

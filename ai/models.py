@@ -213,6 +213,59 @@ class AIUsageLog(models.Model):
         return f"{self.feature}/{self.model} @{self.created_at:%Y-%m-%d %H:%M}"
 
 
+class AIAgent(models.Model):
+    """Marker row for a Plane user that is in fact an AI agent.
+
+    An agent is just a normal Plane ``db.User`` with:
+
+      - a row here (``is_ai_agent`` semantics — we never add a column
+        to ``db.User`` per CLAUDE.md invariant 6),
+      - ``WorkspaceMember`` row(s) on its workspace with a NON-admin
+        role (MEMBER, not ADMIN),
+      - ``ProjectMember`` row(s) restricted to the specific projects
+        the agent is allowed to act in (project-scope, not workspace-
+        wide).
+
+    The TZ 5.1 trigger uses this table to recognise that a save event
+    on an Issue concerns an agent (because the agent is an assignee).
+    The actual write capabilities are governed by the same ACL layer
+    as humans (``ai/acl.py``) plus the white-list in the worker (TZ
+    5.2). Disabling an agent by flipping ``enabled=False`` halts new
+    triggers immediately without revoking its ProjectMember rows.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    user = models.OneToOneField(
+        "db.User",
+        on_delete=models.CASCADE,
+        related_name="ai_agent",
+    )
+    workspace = models.ForeignKey(
+        "db.Workspace",
+        on_delete=models.CASCADE,
+        related_name="ai_agents",
+    )
+    enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "ai_agent"
+        verbose_name = "AI agent"
+        verbose_name_plural = "AI agents"
+        indexes = [
+            # Hot path of the trigger: "is this user id an enabled
+            # agent in this workspace?".
+            models.Index(
+                fields=["workspace", "enabled"],
+                name="ai_agent_ws_enabled_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"AIAgent(user={self.user_id}, ws={self.workspace_id})"
+
+
 class AIProjectSettings(models.Model):
     """Per-project AI opt-out flag.
 

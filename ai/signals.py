@@ -188,6 +188,14 @@ def connect() -> None:
     post_save.connect(_on_issue_saved, sender=Issue, dispatch_uid="ai.issue_saved")
     post_delete.connect(_on_issue_deleted, sender=Issue, dispatch_uid="ai.issue_deleted")
 
+    # TZ 5.1 — agent trigger. Separate receiver (different dispatch_uid)
+    # so it can be disabled independently of the reindex pipeline.
+    from ai.agent_triggers import on_issue_saved_for_agent
+
+    post_save.connect(
+        on_issue_saved_for_agent, sender=Issue, dispatch_uid="ai.agent_trigger"
+    )
+
     post_save.connect(
         _on_comment_saved, sender=IssueComment, dispatch_uid="ai.comment_saved"
     )
@@ -198,7 +206,9 @@ def connect() -> None:
     post_save.connect(_on_page_saved, sender=Page, dispatch_uid="ai.page_saved")
     post_delete.connect(_on_page_deleted, sender=Page, dispatch_uid="ai.page_deleted")
 
-    logger.info("ai signals connected: Issue, IssueComment, Page")
+    logger.info(
+        "ai signals connected: Issue, IssueComment, Page (+ agent trigger)"
+    )
 
 
 # Connection is intentionally inside `connect()`, not via `@receiver`
