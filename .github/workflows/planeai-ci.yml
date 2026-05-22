@@ -110,6 +110,11 @@ jobs:
           docker cp scripts/verify_reindex.py plane-ci-api-1:/code/plane/db/management/commands/verify_reindex.py
           docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T api python manage.py verify_reindex
 
+      - name: verify_backfill (backfill_embeddings management command)
+        run: |
+          docker cp scripts/verify_backfill.py plane-ci-api-1:/code/plane/db/management/commands/verify_backfill.py
+          docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T api python manage.py verify_backfill
+
       - name: pgvector >= 0.8.2 is available + CREATE EXTENSION succeeds
         run: |
           set -e
