@@ -1,0 +1,63 @@
+name: planeAI nightly (LLM integration)
+
+# Runs the prompt-injection corpus against the real Anthropic API.
+# Skipped on every PR — costs real tokens and depends on upstream
+# model availability. Fires nightly at 03:00 UTC and on manual
+# dispatch.
+#
+# Requires repo secret ``ANTHROPIC_API_KEY`` (use a separate, low-
+# budget key for this — see SECRETS.md). The same secret is *not*
+# wired into the PR pipeline.
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: planeai-nightly
+  cancel-in-progress: false
+
+jobs:
+  llm-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build plane-backend-ai image
+        run: docker build -f Dockerfile.ai -t plane-backend-ai:local .
+
+      - name: Bring up stack
+        working-directory: deploy-local
+        run: |
+          cp ../deployments/cli/community/variables.env .env
+          KEY=$(python ../scripts/gen_encryption_key.py)
+          echo "FIELD_ENCRYPTION_KEY=$KEY" >> .env
+          docker compose -p plane-nightly up -d
+
+      - name: Wait for migrator
+        run: |
+          set -e
+          for i in $(seq 1 80); do
+            s=$(docker inspect -f '{{.State.Status}}' plane-nightly-migrator-1 2>/dev/null || echo missing)
+            [ "$s" = "exited" ] && exit 0
+            sleep 8
+          done
+          echo "migrator did not exit"; exit 1
+
+      - name: Run llm_integration suite
+        run: |
+          docker compose -p plane-nightly -f deploy-local/docker-compose.yml exec -T \
+            -e PLANEAI_INTEGRATION=1 \
+            -e ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} \
+            api sh -c "cd /code && pytest -v -m llm_integration ai/tests/test_injection.py"
+
+      - name: Tear down
+        if: always()
+        working-directory: deploy-local
+        run: docker compose -p plane-nightly down -v
