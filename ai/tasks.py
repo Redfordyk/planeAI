@@ -12,7 +12,7 @@ from ai import providers
 from ai.chunking import chunk_text
 from ai.loaders import load_source_text
 from ai.models import AIUsageLog, DocumentChunk, WorkspaceAIConfig
-from ai.pricing import embed_cost
+from ai.usage import record_usage
 
 
 logger = logging.getLogger("plane.ai.tasks")
@@ -148,14 +148,12 @@ def reindex_source(self, workspace_id, project_id, source_type, source_id):
         # consistent: we never see a mix of old + new chunks.
         existing.delete()
         DocumentChunk.objects.bulk_create(rows)
-        AIUsageLog.objects.create(
+        record_usage(
             workspace_id=ws_id,
-            user=None,
+            user_id=None,
             feature=AIUsageLog.FEATURE_EMBED,
             model=embed_model,
-            input_tokens=tokens,
-            output_tokens=0,
-            cost_usd=embed_cost(embed_model, tokens),
+            usage={"total_tokens": tokens},
         )
 
     logger.info(

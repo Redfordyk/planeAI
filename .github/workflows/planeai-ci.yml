@@ -115,6 +115,11 @@ jobs:
           docker cp scripts/verify_backfill.py plane-ci-api-1:/code/plane/db/management/commands/verify_backfill.py
           docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T api python manage.py verify_backfill
 
+      - name: verify_usage_guard (record_usage + require_ai_budget)
+        run: |
+          docker cp scripts/verify_usage_guard.py plane-ci-api-1:/code/plane/db/management/commands/verify_usage_guard.py
+          docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T api python manage.py verify_usage_guard
+
       - name: pgvector >= 0.8.2 is available + CREATE EXTENSION succeeds
         run: |
           set -e
