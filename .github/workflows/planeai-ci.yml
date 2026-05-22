@@ -120,6 +120,11 @@ jobs:
           docker cp scripts/verify_usage_guard.py plane-ci-api-1:/code/plane/db/management/commands/verify_usage_guard.py
           docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T api python manage.py verify_usage_guard
 
+      - name: verify_index_status (DRF endpoint + ACL)
+        run: |
+          docker cp scripts/verify_index_status.py plane-ci-api-1:/code/plane/db/management/commands/verify_index_status.py
+          docker compose -p plane-ci -f deploy-local/docker-compose.yml exec -T api python manage.py verify_index_status
+
       - name: pgvector >= 0.8.2 is available + CREATE EXTENSION succeeds
         run: |
           set -e
