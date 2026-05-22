@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+from asgiref.sync import sync_to_async
 from django.apps import apps
 from django.db.models import Count
+from django.http import StreamingHttpResponse
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ai.models import DocumentChunk
+from ai.models import DocumentChunk, WorkspaceAIConfig
+from ai.prompts import SEARCH_SYSTEM, build_search_messages
+from ai.search import build_context, retrieve, source_ids
+from ai.streaming import claude_sse, sse_response_headers
+from ai.usage import tokens_used_this_month
 
 
 READY_THRESHOLD = 0.95  # >= 95% indexed counts as "ready" (frontend gate)
@@ -71,6 +77,105 @@ def _is_workspace_member(user, workspace_id) -> bool:
         is_active=True,
         deleted_at__isnull=True,
     ).exists()
+
+
+class SearchView(APIView):
+    """``POST /api/ai/workspaces/<workspace_id>/search/``.
+
+    Streams the RAG answer as Server-Sent Events. Request body:
+
+      {"query": "<text>", "top_k": 20}
+
+    Response: ``text/event-stream`` with frames as documented in
+    ``ai.streaming.claude_sse``. The view itself is ``async`` because
+    StreamingHttpResponse(async_gen, ...) only works that way under
+    Django + uvicorn (TZ 0.3 / STREAMING.md).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    async def post(self, request, workspace_id):
+        query = (request.data.get("query") or "").strip()
+        if not query:
+            return Response(
+                {"error": "query is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        top_k = int(request.data.get("top_k") or 20)
+        user = request.user
+
+        # Pre-flight: workspace member, AI enabled, budget OK. All
+        # inline-async-safe via sync_to_async wrappers — keeps the
+        # 403/429 path returning a regular DRF Response BEFORE we
+        # start the SSE stream (clients distinguish HTTP errors from
+        # SSE error frames).
+        cfg = await sync_to_async(_load_cfg, thread_sensitive=False)(workspace_id)
+        if cfg is None:
+            return Response(
+                {"error": "AI disabled for this workspace"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        is_member = await sync_to_async(_is_workspace_member, thread_sensitive=False)(
+            user, workspace_id
+        )
+        if not is_member:
+            return Response(
+                {"error": "not a workspace member"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        used = await sync_to_async(tokens_used_this_month, thread_sensitive=False)(
+            workspace_id
+        )
+        if used >= cfg.monthly_token_budget:
+            return Response(
+                {
+                    "error": "Monthly AI budget exceeded",
+                    "used_tokens": used,
+                    "budget_tokens": cfg.monthly_token_budget,
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        # Retrieval (sync ORM + sync OpenAI embed call) — must
+        # finish before we start streaming so the `sources` frame
+        # can be emitted first.
+        chunks = await sync_to_async(retrieve, thread_sensitive=False)(
+            workspace_id=workspace_id,
+            user=user,
+            query=query,
+            cfg=cfg,
+            top_k=top_k,
+        )
+        sources = source_ids(chunks)
+        context = build_context(chunks)
+        messages = build_search_messages(context, query)
+
+        gen = claude_sse(
+            cfg=cfg,
+            system=SEARCH_SYSTEM,
+            messages=messages,
+            sources=sources,
+            workspace_id=workspace_id,
+            user_id=user.id,
+        )
+        response = StreamingHttpResponse(
+            gen, content_type="text/event-stream"
+        )
+        for header, value in sse_response_headers().items():
+            response[header] = value
+        return response
+
+
+def _load_cfg(workspace_id):
+    return (
+        WorkspaceAIConfig.objects.filter(
+            workspace_id=workspace_id, enabled=True
+        )
+        .only("anthropic_key", "openai_key", "chat_model", "embed_model", "monthly_token_budget")
+        .first()
+    )
 
 
 def _coverage_breakdown(workspace_id) -> dict[str, dict[str, int]]:
