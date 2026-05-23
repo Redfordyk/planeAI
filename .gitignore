@@ -117,8 +117,10 @@ build/
 build/
 .react-router/
 temp/
-scripts/
-!packages/i18n/scripts/
+# planeAI: removed the broad ``scripts/`` exclusion that used to
+# live here — it conflicted with the actually-tracked ``scripts/`` dir
+# (verify_*.py utilities and now scripts/backup/ for TZ 6.1).
+# packages/i18n/scripts/ still managed via packages-level rules below.
 
 # i18n auto-generated types (regenerated on every build)
 packages/i18n/src/types/keys.generated.ts

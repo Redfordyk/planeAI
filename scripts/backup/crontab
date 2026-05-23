@@ -1,0 +1,26 @@
+# scripts/backup/crontab — cron table for the planeai-backup sidecar.
+#
+# All times UTC (TZ=Etc/UTC set in compose). Choose times when Plane is
+# under low load:
+#   02:00 UTC = early-morning EU, late-evening US east, mid-day APAC.
+# Schedule overrides via env are deliberately NOT supported — keep
+# the schedule visible in source control so an audit shows when
+# backups run.
+#
+# Every job sources /opt/backup/cron_env.sh (written by entrypoint.sh)
+# so it sees runtime env (POSTGRES_*, AWS_*, BACKUP_*). Output goes to
+# stderr -> docker logs.
+#
+# Format: m h d mo dow command
+
+# 02:00 UTC daily — Postgres dump + offsite mirror.
+0 2 * * *   . /opt/backup/cron_env.sh; /opt/backup/backup_postgres.sh >> /proc/1/fd/2 2>&1
+
+# 02:30 UTC daily — MinIO offsite mirror.
+30 2 * * *  . /opt/backup/cron_env.sh; /opt/backup/backup_minio.sh    >> /proc/1/fd/2 2>&1
+
+# 03:00 UTC on the 1st of each month — automated restore test on the
+# most recent dump. Failure of this job is the loudest signal that
+# backups are "iceberg-style" working (you see the dumps but they
+# don't actually restore).
+0 3 1 * *   . /opt/backup/cron_env.sh; /opt/backup/restore_test.sh latest >> /proc/1/fd/2 2>&1

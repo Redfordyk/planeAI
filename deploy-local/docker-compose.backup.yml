@@ -1,0 +1,81 @@
+# deploy-local/docker-compose.backup.yml — backup sidecar overlay.
+#
+# Compose this on TOP of docker-compose.yml (+ staging delta if used):
+#
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.staging.yml \
+#     -f docker-compose.backup.yml \
+#     up -d planeai-backup
+#
+# The sidecar:
+#   - shares the ``plane-db`` network so it can reach Postgres by hostname,
+#   - shares the ``plane-minio`` network so it can pull from MinIO,
+#   - mounts a host directory for the local backup spool (14 days
+#     retention, override via BACKUP_LOCAL_RETENTION_DAYS),
+#   - mounts /var/run/docker.sock read-only so restore_test.sh can
+#     spin up the throwaway pgvector container. **This is the only
+#     reason the sidecar needs Docker access**; if monthly restore-
+#     test runs from CI or a separate machine instead, remove the
+#     socket mount and the sidecar drops to data-plane-only privileges.
+#
+# Required env (set in .env at the staging/prod host):
+#   POSTGRES_USER / POSTGRES_PASSWORD / POSTGRES_DB
+#   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY  (Plane's MinIO creds)
+#   BACKUP_S3_ENDPOINT       e.g. https://s3.eu-central-2.amazonaws.com
+#                                 or https://s3.us-west-002.backblazeb2.com
+#                                 or https://<account>.r2.cloudflarestorage.com
+#   BACKUP_S3_ACCESS_KEY     bucket-scoped key (NOT the plane MinIO key)
+#   BACKUP_S3_SECRET_KEY
+#   BACKUP_S3_BUCKET         e.g. planeai-prod-backups
+#
+# Optional:
+#   BACKUP_LOCAL_RETENTION_DAYS  default 14
+#   BACKUP_MINIO_BUCKETS         default ${AWS_S3_BUCKET_NAME:-uploads}
+#   BACKUP_RESTORE_TEST_MIN_CHUNKS  default 1 (fresh installs may need 0)
+
+services:
+  planeai-backup:
+    build:
+      context: ../scripts/backup
+      dockerfile: Dockerfile
+    image: planeai-backup:local
+    container_name: planeai-backup
+    restart: unless-stopped
+    environment:
+      TZ: Etc/UTC
+      # Postgres target — talks to the in-stack plane-db.
+      POSTGRES_USER: ${POSTGRES_USER:-plane}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-plane}
+      POSTGRES_DB: ${POSTGRES_DB:-plane}
+      BACKUP_PG_HOST: ${BACKUP_PG_HOST:-plane-db}
+      BACKUP_PG_PORT: ${BACKUP_PG_PORT:-5432}
+      # MinIO source — uses Plane's MinIO creds via the same vars
+      # Plane itself uses (no key duplication in .env).
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-access-key}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-secret-key}
+      AWS_S3_ENDPOINT_URL: ${AWS_S3_ENDPOINT_URL:-http://plane-minio:9000}
+      AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME:-uploads}
+      # Offsite — operator picks the vendor by setting these four.
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT}
+      BACKUP_S3_ACCESS_KEY: ${BACKUP_S3_ACCESS_KEY}
+      BACKUP_S3_SECRET_KEY: ${BACKUP_S3_SECRET_KEY}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET}
+      BACKUP_LOCAL_RETENTION_DAYS: ${BACKUP_LOCAL_RETENTION_DAYS:-14}
+      BACKUP_LOCAL_DIR: /var/backups/planeai
+      BACKUP_MINIO_BUCKETS: ${BACKUP_MINIO_BUCKETS:-}
+      BACKUP_RESTORE_TEST_MIN_CHUNKS: ${BACKUP_RESTORE_TEST_MIN_CHUNKS:-1}
+    volumes:
+      - planeai-backup-spool:/var/backups/planeai
+      # See header comment — needed only if restore_test runs INSIDE
+      # this sidecar. If you instead run restore_test from CI or a
+      # separate test host, comment this line out.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - default
+    depends_on:
+      - plane-db
+      - plane-minio
+
+volumes:
+  planeai-backup-spool:
