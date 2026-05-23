@@ -133,7 +133,7 @@ def test_should_describe_true_on_whitespace_only(describe_setup):
     # apps/api/plane/db/models/issue.py). So we set the HTML; Plane
     # strips it back into stripped on save.
     describe_setup.issue.description_html = "   \n\t  "
-    describe_setup.issue.save(update_fields=["description_html"])
+    describe_setup.issue.save(update_fields=["description_html", "description_stripped"])
     assert should_describe(describe_setup.issue) is True
 
 
@@ -142,7 +142,7 @@ def test_should_describe_true_just_below_threshold(describe_setup):
     """A description one char short of the threshold still triggers —
     the inequality is strict (``<``)."""
     describe_setup.issue.description_html = "<p>" + ("x" * (DESCRIBE_MIN_DESCRIPTION_CHARS - 1)) + "</p>"
-    describe_setup.issue.save(update_fields=["description_html"])
+    describe_setup.issue.save(update_fields=["description_html", "description_stripped"])
     assert should_describe(describe_setup.issue) is True
 
 
@@ -150,7 +150,7 @@ def test_should_describe_true_just_below_threshold(describe_setup):
 def test_should_describe_false_at_threshold(describe_setup):
     """Exactly threshold-length is "enough" — we don't fire."""
     describe_setup.issue.description_html = "<p>" + ("x" * DESCRIBE_MIN_DESCRIPTION_CHARS) + "</p>"
-    describe_setup.issue.save(update_fields=["description_html"])
+    describe_setup.issue.save(update_fields=["description_html", "description_stripped"])
     assert should_describe(describe_setup.issue) is False
 
 
@@ -164,7 +164,7 @@ def test_should_describe_false_on_substantial_description(describe_setup):
         "across reloads and respect the system preference by default."
     )
     describe_setup.issue.description_html = "<p>" + real + "</p>"
-    describe_setup.issue.save(update_fields=["description_html"])
+    describe_setup.issue.save(update_fields=["description_html", "description_stripped"])
     assert should_describe(describe_setup.issue) is False
 
 
@@ -271,7 +271,7 @@ def test_build_describe_prompt_shows_existing_short_description(describe_setup):
     """A title-plus-one-liner case: the existing short text is shown
     to the model so the draft expands on it rather than ignoring it."""
     describe_setup.issue.description_html = "<p>TLDR: toggle theme</p>"
-    describe_setup.issue.save(update_fields=["description_html"])
+    describe_setup.issue.save(update_fields=["description_html", "description_stripped"])
     prompt = build_describe_prompt(describe_setup.issue, context="")
     assert "TLDR: toggle theme" in prompt
 
@@ -367,12 +367,16 @@ def test_run_agent_body_runs_describe_only_when_description_short(
     assert "describe" in result["scenarios"]
 
     # Case B: substantial description, gate closes, scenario skipped.
+    # Plane recomputes description_stripped from description_html on
+    # every save — so the test sets the html, which strips to the
+    # same text we'd want stripped to be.
     calls.clear()
-    describe_setup.issue.description_stripped = (
+    real = (
         "This is a real, human-written description that is well above "
         "the trigger threshold and should leave the agent alone."
     )
-    describe_setup.issue.save(update_fields=["description_stripped"])
+    describe_setup.issue.description_html = "<p>" + real + "</p>"
+    describe_setup.issue.save(update_fields=["description_html", "description_stripped"])
 
     result = agent_worker.run_agent_body(describe_setup.issue.id)
     assert calls == []

@@ -379,20 +379,22 @@ def _apply_set_labels(*, issue, params: dict) -> dict:
     )
     ids = [lid for lid in resolved.values() if lid is not None]
     label_qs = Label.objects.filter(id__in=ids)
-    # IssueLabel (through model) extends ProjectBaseModel: workspace_id
-    # and project_id are NOT NULL. through_defaults supplies both.
-    # clear=True forces a hard reset of the relation; without it,
-    # `.set()` on a Plane soft-delete through model can leave stale
-    # rows alongside the new ones (the remove step quietly skips when
-    # the manager filters out the rows it's trying to delete).
-    issue.labels.set(
-        label_qs,
-        clear=True,
-        through_defaults={
-            "workspace_id": issue.workspace_id,
-            "project_id": issue.project_id,
-        },
-    )
+    # Replace IssueLabel rows directly. Plane's through-model
+    # SoftDeletionManager interacts oddly with Django's M2M `.set()` —
+    # it can leave stale rows even with clear=True, because the
+    # manager filters out the rows the remove step is trying to act
+    # on. We bypass the M2M manager and operate on the through model.
+    IssueLabel = django_apps.get_model("db", "IssueLabel")
+    IssueLabel.all_objects.filter(issue=issue).delete()  # hard delete
+    IssueLabel.objects.bulk_create([
+        IssueLabel(
+            issue=issue,
+            label_id=lid,
+            workspace_id=issue.workspace_id,
+            project_id=issue.project_id,
+        )
+        for lid in ids
+    ])
     return {
         "labels_set": len(ids),
         "rejected_cross_project": bad,

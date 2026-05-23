@@ -384,14 +384,20 @@ class AgentActionUndoView(APIView):
             id__in=prev_ids, project_id=action.project_id
         )
         with agent_acting(issue.id):
-            issue.labels.set(
-                label_qs,
-                clear=True,
-                through_defaults={
-                    "workspace_id": issue.workspace_id,
-                    "project_id": issue.project_id,
-                },
-            )
+            # Bypass the M2M manager — Plane's soft-delete through
+            # leaves stale IssueLabel rows when we go via .set().
+            from django.apps import apps as django_apps
+            IssueLabel = django_apps.get_model("db", "IssueLabel")
+            IssueLabel.all_objects.filter(issue=issue).delete()
+            IssueLabel.objects.bulk_create([
+                IssueLabel(
+                    issue=issue,
+                    label_id=row.id,
+                    workspace_id=issue.workspace_id,
+                    project_id=issue.project_id,
+                )
+                for row in label_qs
+            ])
 
 
 class _UndoError(Exception):

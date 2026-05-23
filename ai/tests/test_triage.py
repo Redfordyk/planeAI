@@ -62,13 +62,14 @@ def triage_setup(
     )
 
     issue = make_issue(workspace=ws, project=project, name="please triage")
-    # Assign the agent user — _agent_for(issue) resolves via the
-    # assignees relation, so without this run_agent_body would
-    # exit with reason="no_agent" before any scenario runs.
-    issue.assignees.add(
-        agent_user,
-        through_defaults={"workspace_id": ws.id, "project_id": project.id},
-    )
+    # NB: the agent is intentionally NOT pre-assigned. Tests that
+    # exercise run_agent_body must add the assignment themselves:
+    #   triage_setup.issue.assignees.add(
+    #       triage_setup.agent_user,
+    #       through_defaults={"workspace_id": triage_setup.workspace.id,
+    #                         "project_id": triage_setup.project.id},
+    #   )
+    # That keeps the "no assignees after triage" invariant test honest.
 
     class _Setup:
         pass
@@ -201,6 +202,15 @@ def test_run_agent_body_skips_when_all_scenarios_idempotent(
     its predicate matches on ``input.text`` startswith.
     """
     from ai.describe import DESCRIBE_MARKER
+
+    # Assign the agent so _agent_for(issue) finds it.
+    triage_setup.issue.assignees.add(
+        triage_setup.agent_user,
+        through_defaults={
+            "workspace_id": triage_setup.workspace.id,
+            "project_id": triage_setup.project.id,
+        },
+    )
 
     # Triage bucket — set_priority counts.
     AIAgentActionLog.objects.create(
