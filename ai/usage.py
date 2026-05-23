@@ -344,7 +344,11 @@ def compute_usage_stats(
     }
     # Fill in zero-spend days so the chart line doesn't skip dates.
     by_day = []
-    span_days = max(int((end.date() - start.date()).days) + 1, 1)
+    # `end` is exclusive (compute_usage_stats period contract), so the
+    # number of full days included is `(end - start).days`. Add 1 only
+    # when end is later than start by some intra-day amount but the
+    # date hasn't rolled over yet — we always want at least one row.
+    span_days = max(int((end.date() - start.date()).days), 1)
     # Cap to one year (366 days) to keep the response bounded even on
     # an absurd ?from/to. The endpoint validates this server-side too.
     span_days = min(span_days, 366)

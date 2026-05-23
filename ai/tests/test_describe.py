@@ -75,6 +75,13 @@ def describe_setup(
         name="Add dark mode toggle to settings page",
         description="",
     )
+    # Assign the agent user — _agent_for(issue) resolves via the
+    # assignees relation, so without this run_agent_body would
+    # return reason="no_agent" before the describe scenario runs.
+    issue.assignees.add(
+        agent_user,
+        through_defaults={"workspace_id": ws.id, "project_id": project.id},
+    )
 
     class _Setup:
         pass

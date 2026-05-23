@@ -62,6 +62,13 @@ def triage_setup(
     )
 
     issue = make_issue(workspace=ws, project=project, name="please triage")
+    # Assign the agent user — _agent_for(issue) resolves via the
+    # assignees relation, so without this run_agent_body would
+    # exit with reason="no_agent" before any scenario runs.
+    issue.assignees.add(
+        agent_user,
+        through_defaults={"workspace_id": ws.id, "project_id": project.id},
+    )
 
     class _Setup:
         pass

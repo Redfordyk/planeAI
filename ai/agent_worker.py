@@ -379,12 +379,15 @@ def _apply_set_labels(*, issue, params: dict) -> dict:
     )
     ids = [lid for lid in resolved.values() if lid is not None]
     label_qs = Label.objects.filter(id__in=ids)
-    # IssueLabel (through model) extends ProjectBaseModel and requires
-    # workspace_id + project_id NOT NULL — `.set(qs)` without
-    # through_defaults would crash on insert. We know both from the
-    # issue we're operating on.
+    # IssueLabel (through model) extends ProjectBaseModel: workspace_id
+    # and project_id are NOT NULL. through_defaults supplies both.
+    # clear=True forces a hard reset of the relation; without it,
+    # `.set()` on a Plane soft-delete through model can leave stale
+    # rows alongside the new ones (the remove step quietly skips when
+    # the manager filters out the rows it's trying to delete).
     issue.labels.set(
         label_qs,
+        clear=True,
         through_defaults={
             "workspace_id": issue.workspace_id,
             "project_id": issue.project_id,

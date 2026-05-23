@@ -386,6 +386,7 @@ class AgentActionUndoView(APIView):
         with agent_acting(issue.id):
             issue.labels.set(
                 label_qs,
+                clear=True,
                 through_defaults={
                     "workspace_id": issue.workspace_id,
                     "project_id": issue.project_id,
