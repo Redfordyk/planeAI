@@ -11,11 +11,34 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from ai.agent_loop import run_agent
 from ai.models import DocumentChunk, WorkspaceAIConfig
 from ai.prompts import SEARCH_SYSTEM, build_search_messages
 from ai.search import build_context, retrieve, source_ids
 from ai.streaming import claude_sse, sse_response_headers
+from ai.transcribe import transcribe_audio
 from ai.usage import tokens_used_this_month
+
+
+def _user_can_use_ai(user, workspace_id) -> tuple[bool, str | None, WorkspaceAIConfig | None, int]:
+    """Combined gate: workspace member + AI enabled + budget OK.
+
+    Returns ``(ok, error_message, cfg, http_status)``. cfg is non-None
+    when ok=True.
+    """
+    if not _is_workspace_member(user, workspace_id):
+        return False, "not a workspace member", None, status.HTTP_403_FORBIDDEN
+    cfg = (
+        WorkspaceAIConfig.objects.filter(workspace_id=workspace_id, enabled=True)
+        .only("anthropic_key", "openai_key", "chat_model", "embed_model", "monthly_token_budget")
+        .first()
+    )
+    if cfg is None:
+        return False, "AI disabled for this workspace", None, status.HTTP_403_FORBIDDEN
+    used = tokens_used_this_month(workspace_id)
+    if used >= cfg.monthly_token_budget:
+        return False, "Monthly AI budget exceeded", None, status.HTTP_429_TOO_MANY_REQUESTS
+    return True, None, cfg, 200
 
 
 READY_THRESHOLD = 0.95  # >= 95% indexed counts as "ready" (frontend gate)
@@ -228,3 +251,100 @@ def _coverage_breakdown(workspace_id) -> dict[str, dict[str, int]]:
             "coverage": round(i / t, 2) if t else 1.0,
         }
     return out
+
+
+# ---------- Voice transcription -------------------------------------------
+
+
+class TranscribeView(APIView):
+    """``POST /api/ai/workspaces/<workspace_id>/transcribe/``.
+
+    Multipart-form upload with field ``audio`` containing the raw
+    audio blob (webm/opus from MediaRecorder is fine). Returns
+    ``{"text": "..."}``. Uses the workspace's stored OpenAI key.
+    """
+
+    permission_classes = [IsAuthenticated]
+    # Allow up to 25 MB — Whisper's hard limit.
+    parser_classes = [__import__("rest_framework").parsers.MultiPartParser]
+
+    def post(self, request, workspace_id):
+        ok, err, cfg, code = _user_can_use_ai(request.user, workspace_id)
+        if not ok:
+            return Response({"error": err}, status=code)
+        if not cfg.openai_key:
+            return Response(
+                {"error": "transcription requires an OpenAI key in WorkspaceAIConfig"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        upload = request.FILES.get("audio")
+        if upload is None:
+            return Response(
+                {"error": "field 'audio' is required (multipart upload)"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if upload.size and upload.size > 25 * 1024 * 1024:
+            return Response(
+                {"error": "audio too large (Whisper limit is 25 MB)"},
+                status=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            )
+        language = request.data.get("language") or "ru"
+
+        try:
+            text = transcribe_audio(
+                api_key=cfg.openai_key,
+                audio_bytes=upload.read(),
+                filename=upload.name or "audio.webm",
+                language=language,
+            )
+        except Exception as e:  # noqa: BLE001
+            return Response(
+                {"error": f"transcription failed: {type(e).__name__}: {e}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response({"text": text})
+
+
+# ---------- Agent (tool-use loop) -----------------------------------------
+
+
+class AgentExecuteView(APIView):
+    """``POST /api/ai/workspaces/<workspace_id>/agent/execute/``.
+
+    Body: ``{"prompt": "..."}``. Runs the tool-use loop
+    (``ai.agent_loop.run_agent``) which can call create_project,
+    create_issue, list_projects, list_members on the user's behalf.
+    Returns the agent's final reply plus an ``actions`` log of every
+    tool call (with arguments + result) for the UI to render.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, workspace_id):
+        ok, err, cfg, code = _user_can_use_ai(request.user, workspace_id)
+        if not ok:
+            return Response({"error": err}, status=code)
+        prompt = (request.data.get("prompt") or "").strip()
+        if not prompt:
+            return Response(
+                {"error": "prompt is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not cfg.anthropic_key:
+            return Response(
+                {"error": "agent requires a chat API key in WorkspaceAIConfig"},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        try:
+            result = run_agent(
+                user=request.user,
+                workspace_id=workspace_id,
+                prompt=prompt,
+                cfg=cfg,
+            )
+        except Exception as e:  # noqa: BLE001
+            return Response(
+                {"error": f"agent failed: {type(e).__name__}: {e}"},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response(result)
