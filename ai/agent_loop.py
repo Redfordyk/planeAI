@@ -156,24 +156,32 @@ def run_agent(*, user, workspace_id, prompt: str, cfg: WorkspaceAIConfig) -> dic
             }
 
         # Append assistant's tool-call turn verbatim — required by the
-        # OpenAI/DeepSeek chat-completions protocol.
-        messages.append(
-            {
-                "role": "assistant",
-                "content": msg.content or "",
-                "tool_calls": [
-                    {
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.function.name,
-                            "arguments": tc.function.arguments,
-                        },
-                    }
-                    for tc in tool_calls
-                ],
-            }
-        )
+        # OpenAI/DeepSeek chat-completions protocol. DeepSeek v4 in
+        # thinking mode additionally requires `reasoning_content` from
+        # the previous assistant turn to be echoed back, otherwise
+        # subsequent calls fail with HTTP 400
+        # 'The `reasoning_content` in the thinking mode must be passed
+        # back to the API.' OpenAI ignores the field; DeepSeek needs
+        # it.
+        asst_turn: dict = {
+            "role": "assistant",
+            "content": msg.content or "",
+            "tool_calls": [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+                for tc in tool_calls
+            ],
+        }
+        reasoning = getattr(msg, "reasoning_content", None)
+        if reasoning:
+            asst_turn["reasoning_content"] = reasoning
+        messages.append(asst_turn)
 
         # Execute each tool, append a tool result message.
         for tc in tool_calls:

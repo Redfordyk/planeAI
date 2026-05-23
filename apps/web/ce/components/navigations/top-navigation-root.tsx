@@ -10,7 +10,7 @@
  *     the URL.
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { observer } from "mobx-react";
 import { useParams, usePathname } from "next/navigation";
 import { cn } from "@plane/utils";
@@ -38,11 +38,18 @@ export const TopNavigationRoot = observer(function TopNavigationRoot() {
   const { preferences } = useAppRailPreferences();
   const { getWorkspaceBySlug } = useWorkspace();
 
-  // planeAI: visible AI panel state
+  // planeAI: visible AI panel state. Mounted=false on first render
+  // (SSR + initial client paint) so we don't emit different markup
+  // than the server did — React's hydration check (errors #418/#423)
+  // is otherwise flaky because getWorkspaceBySlug() returns null on
+  // the server and a populated object on the client.
   const [aiOpen, setAiOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const slugStr = workspaceSlug?.toString() ?? "";
   const currentWorkspace = slugStr ? getWorkspaceBySlug(slugStr) : null;
   const currentWorkspaceId = (currentWorkspace as { id?: string } | null)?.id ?? "";
+  const showAIButton = mounted && Boolean(currentWorkspaceId);
 
   const showLabel = preferences.displayMode === "icon_with_label";
 
@@ -74,8 +81,8 @@ export const TopNavigationRoot = observer(function TopNavigationRoot() {
       </div>
       {/* Additional Actions */}
       <div className="flex flex-1 shrink-0 items-center justify-end gap-1">
-        {/* planeAI: prominent AI assistant entry */}
-        {currentWorkspaceId && (
+        {/* planeAI: prominent AI assistant entry (client-only) */}
+        {showAIButton && (
           <Tooltip tooltipContent="ИИ-помощник" position="bottom">
             <button
               type="button"
@@ -112,8 +119,8 @@ export const TopNavigationRoot = observer(function TopNavigationRoot() {
         </div>
       </div>
 
-      {/* planeAI: AI assistant slide-over */}
-      {currentWorkspaceId && (
+      {/* planeAI: AI assistant slide-over (client-only) */}
+      {showAIButton && (
         <AISearchPanel
           open={aiOpen}
           onClose={() => setAiOpen(false)}
