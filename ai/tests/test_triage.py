@@ -179,12 +179,19 @@ def test_already_triaged_ignores_rejected_actions(triage_setup):
 
 
 @pytest.mark.django_db
-def test_run_agent_body_skips_when_already_triaged(triage_setup, monkeypatch):
-    """Top-level idempotency: second worker run is a no-op,
-    explicitly returns ``reason='already_triaged'`` so callers /
+def test_run_agent_body_skips_when_all_scenarios_idempotent(
+    triage_setup, monkeypatch
+):
+    """Top-level idempotency: when every scenario's gate is closed,
+    the worker returns ``reason='all_scenarios_idempotent'`` so
     observability can tell it was a deliberate skip rather than a
-    silent drop."""
-    # Seed: a prior applied triage action.
+    silent drop.
+
+    We seed an applied row for each scenario bucket (triage:
+    ``set_priority``; dedupe: ``add_comment``) so both
+    ``already_triaged`` and ``already_deduped`` return True.
+    """
+    # Triage bucket — set_priority counts.
     AIAgentActionLog.objects.create(
         agent=triage_setup.agent,
         workspace_id=triage_setup.workspace.id,
@@ -195,10 +202,20 @@ def test_run_agent_body_skips_when_already_triaged(triage_setup, monkeypatch):
         output={"priority": "high", "changed": True},
         status=AIAgentActionLog.STATUS_APPLIED,
     )
+    # Dedupe bucket — applied add_comment closes the gate.
+    AIAgentActionLog.objects.create(
+        agent=triage_setup.agent,
+        workspace_id=triage_setup.workspace.id,
+        project_id=triage_setup.project.id,
+        issue_id=triage_setup.issue.id,
+        tool_name="add_comment",
+        input={"text": "Possible duplicates: PROJ-1"},
+        output={"comment_id": "deadbeef", "comment_chars": 30},
+        status=AIAgentActionLog.STATUS_APPLIED,
+    )
 
-    # Ensure the worker never reaches Claude — if it did, this would
-    # raise (no anthropic key resolved without mock_claude). Belt:
-    # patch the loop body to fail loudly if we get past the gate.
+    # Ensure the worker never reaches Claude or the embed provider —
+    # if either path runs we have an idempotency bug.
     from ai import agent_worker
 
     monkeypatch.setattr(
@@ -208,7 +225,8 @@ def test_run_agent_body_skips_when_already_triaged(triage_setup, monkeypatch):
     )
 
     result = run_agent_body(triage_setup.issue.id)
-    assert result == {"status": "skipped", "reason": "already_triaged"}
+    assert result["status"] == "skipped"
+    assert result["reason"] == "all_scenarios_idempotent"
 
 
 # ---------------------------------------------------------------------------

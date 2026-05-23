@@ -54,6 +54,15 @@ from ai.models import (
     AIUsageLog,
     WorkspaceAIConfig,
 )
+from ai.dedupe import (
+    DEDUPE_LABEL_NAME,
+    DEDUPE_SYSTEM,
+    DEDUPE_TOOLS,
+    already_deduped,
+    build_dedupe_prompt,
+    ensure_dedupe_label,
+    find_candidates as find_dedupe_candidates,
+)
 from ai.search import build_context, retrieve
 from ai.triage import (
     TRIAGE_SYSTEM,
@@ -78,7 +87,16 @@ AGENT_TOOLS: tuple[str, ...] = (
     "set_priority",
     "suggest_assignee",
     "update_description",
+    "add_comment",
 )
+
+
+# Hard cap on comment text the model may post. Comments aren't billed
+# storage but a multi-kilobyte agent essay is a UX smell — readers
+# will scroll past. Cap aligns with the dedup scenario's needs
+# (a one-line "Possible duplicates: PROJ-42, PROJ-44") with ample
+# slack for future scenarios.
+MAX_COMMENT_CHARS = 2000
 
 
 # Hard cap on the number of write actions per single worker run. The
@@ -175,6 +193,20 @@ AGENT_TOOL_SCHEMAS: list[dict[str, Any]] = [
         "description": (
             "Overwrite the issue's plain-text description. "
             f"Capped at {MAX_DESCRIPTION_CHARS} characters."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "text": {"type": "string"},
+            },
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "add_comment",
+        "description": (
+            "Post a comment on the current issue, authored by the "
+            f"agent user. Capped at {MAX_COMMENT_CHARS} characters."
         ),
         "input_schema": {
             "type": "object",
@@ -377,6 +409,42 @@ def _apply_suggest_assignee(*, issue, agent, params: dict) -> dict:
     }
 
 
+def _apply_add_comment(*, issue, agent, params: dict) -> dict:
+    """Post an IssueComment on the current issue, actor = the
+    agent's user.
+
+    Scope is implicit: the comment is bound to ``issue.project_id``
+    and ``issue.id`` — the tool input never carries either field, so
+    the model cannot redirect the comment elsewhere. Cap on text
+    length protects against an agent essay that no human will read.
+    """
+    IssueComment = django_apps.get_model("db", "IssueComment")
+
+    text = params.get("text")
+    if not isinstance(text, str):
+        raise _AgentRejection("text must be a string")
+    text = text.strip()
+    if not text:
+        raise _AgentRejection("empty comment")
+    if len(text) > MAX_COMMENT_CHARS:
+        raise _AgentRejection(
+            f"comment exceeds {MAX_COMMENT_CHARS} chars"
+        )
+
+    comment = IssueComment.objects.create(
+        project_id=issue.project_id,
+        issue_id=issue.id,
+        actor=agent.user,
+        comment_stripped=text,
+        comment_html=f"<p>{text}</p>",
+        access="INTERNAL",
+    )
+    return {
+        "comment_id": str(comment.id),
+        "comment_chars": len(text),
+    }
+
+
 def _apply_update_description(*, issue, params: dict) -> dict:
     text = params.get("text")
     if not isinstance(text, str):
@@ -399,6 +467,7 @@ _DISPATCH = {
     "set_priority": _apply_set_priority,
     "suggest_assignee": _apply_suggest_assignee,
     "update_description": _apply_update_description,
+    "add_comment": _apply_add_comment,
 }
 
 
@@ -436,7 +505,7 @@ def apply_agent_action(
     try:
         if tool_name == "find_work_items":
             output = handler(issue=issue, agent=agent, params=tool_input, cfg=cfg)
-        elif tool_name == "suggest_assignee":
+        elif tool_name in ("suggest_assignee", "add_comment"):
             output = handler(issue=issue, agent=agent, params=tool_input)
         else:
             output = handler(issue=issue, params=tool_input)
@@ -519,12 +588,197 @@ def _agent_for(issue) -> AIAgent | None:
     )
 
 
+def _run_scenario_loop(
+    *,
+    issue,
+    agent,
+    cfg,
+    system_prompt: str,
+    user_prompt: str,
+    tool_names: tuple[str, ...],
+    write_actions_already: int = 0,
+) -> tuple[list[AIAgentActionLog], str | None, int]:
+    """One scenario's Claude tool-use loop.
+
+    Reused by every scenario in :func:`run_agent_body` so the safety
+    machinery (token accounting, write-action cap, agent_acting,
+    apply_agent_action) lives in exactly one place. Returns the
+    action logs from this scenario, the final assistant text (if
+    any), and the running write-action count for the *next* scenario
+    to budget against.
+
+    The caller picks the system prompt, the user prompt and the
+    subset of :data:`AGENT_TOOL_SCHEMAS` to offer. The loop never
+    invents a tool the caller didn't list — the white-list lives one
+    level above this function (the worker's :data:`AGENT_TOOLS`).
+    """
+    tool_schemas = [
+        s for s in AGENT_TOOL_SCHEMAS if s["name"] in tool_names
+    ]
+    chat = providers.ClaudeChat(api_key=cfg.anthropic_key)
+    messages: list[dict[str, Any]] = [
+        {"role": "user", "content": user_prompt}
+    ]
+    action_logs: list[AIAgentActionLog] = []
+    write_actions = write_actions_already
+    final_text: str | None = None
+
+    for _ in range(AGENT_MAX_STEPS):
+        resp = chat.complete(
+            system=system_prompt,
+            messages=messages,
+            tools=tool_schemas,
+            model=cfg.chat_model or providers.CHAT_MODEL,
+            max_tokens=1024,
+            temperature=0.1,
+        )
+        record_usage(
+            workspace_id=issue.workspace_id,
+            user_id=agent.user_id,
+            feature=AIUsageLog.FEATURE_AGENT,
+            model=cfg.chat_model or providers.CHAT_MODEL,
+            usage=resp.usage,
+        )
+
+        tool_uses = [
+            b for b in resp.content if getattr(b, "type", None) == "tool_use"
+        ]
+        if not tool_uses:
+            final_text = "".join(
+                getattr(b, "text", "") for b in resp.content
+                if getattr(b, "type", None) == "text"
+            )
+            break
+
+        messages.append({"role": "assistant", "content": resp.content})
+        results: list[dict[str, Any]] = []
+        for tu in tool_uses:
+            if write_actions >= AGENT_MAX_ACTIONS:
+                # Budget guard for actions — surface the cap to the
+                # model as a tool_result so it doesn't keep trying.
+                results.append({
+                    "type": "tool_result",
+                    "tool_use_id": tu.id,
+                    "content": json.dumps({"error": "action_cap_reached"}),
+                    "is_error": True,
+                })
+                continue
+
+            log = apply_agent_action(
+                agent=agent,
+                issue=issue,
+                tool_name=tu.name,
+                tool_input=dict(tu.input or {}),
+                cfg=cfg,
+            )
+            action_logs.append(log)
+            # find_work_items is read-only; everything else
+            # consumes one slot of the action budget.
+            if tu.name != "find_work_items":
+                write_actions += 1
+
+            if log.status == AIAgentActionLog.STATUS_APPLIED:
+                body = json.dumps(log.output)
+                is_error = False
+            else:
+                body = json.dumps({"error": log.error, "status": log.status})
+                is_error = True
+            results.append({
+                "type": "tool_result",
+                "tool_use_id": tu.id,
+                "content": body,
+                "is_error": is_error,
+            })
+
+        messages.append({"role": "user", "content": results})
+
+    return action_logs, final_text, write_actions
+
+
+def _run_triage_scenario(*, issue, agent, cfg, write_actions: int) -> tuple[list, str | None, int]:
+    """Triage prompt (TZ 5.3) + scoped tool subset. Caller has
+    already verified :func:`already_triaged` is False."""
+    context_chunks = retrieve(
+        workspace_id=issue.workspace_id,
+        user=agent.user,
+        query=f"{issue.name}\n\n{issue.description_stripped or ''}",
+        cfg=cfg,
+        top_k=8,
+    )
+    context_chunks = [
+        c for c in context_chunks if c.project_id == str(issue.project_id)
+    ]
+    context = build_context(context_chunks)
+    label_names = _project_label_names(issue.project_id)
+    member_emails = _project_member_emails(
+        issue.project_id, exclude_user_id=agent.user_id
+    )
+    user_prompt = build_triage_prompt(
+        issue,
+        context=context,
+        label_names=label_names,
+        member_emails=member_emails,
+    )
+    return _run_scenario_loop(
+        issue=issue,
+        agent=agent,
+        cfg=cfg,
+        system_prompt=TRIAGE_SYSTEM,
+        user_prompt=user_prompt,
+        tool_names=TRIAGE_TOOLS,
+        write_actions_already=write_actions,
+    )
+
+
+def _run_dedupe_scenario(*, issue, agent, cfg, write_actions: int) -> tuple[list, str | None, int]:
+    """Dedup judge-pass (TZ 5.4).
+
+    Skipped when no candidate is above the cosine threshold —
+    returns immediately with no Claude call, no audit rows. When
+    candidates exist, we ensure the ``possible-duplicate`` label is
+    provisioned in the project (so ``set_labels`` won't reject it
+    later) and call Claude as a judge with only ``add_comment`` and
+    ``set_labels`` on the menu.
+    """
+    candidates = find_dedupe_candidates(issue=issue, agent=agent, cfg=cfg)
+    if not candidates:
+        return [], None, write_actions
+
+    # Provision the label before the LLM call. Failing this would
+    # cause set_labels(["possible-duplicate"]) to be rejected by the
+    # cross-project guard, which would falsely look like the model
+    # invented the label — confusing to debug.
+    ensure_dedupe_label(workspace=issue.workspace, project=issue.project)
+
+    project_identifier = getattr(issue.project, "identifier", "") or ""
+    user_prompt = build_dedupe_prompt(
+        issue,
+        candidates=candidates,
+        project_identifier=project_identifier,
+    )
+    return _run_scenario_loop(
+        issue=issue,
+        agent=agent,
+        cfg=cfg,
+        system_prompt=DEDUPE_SYSTEM,
+        user_prompt=user_prompt,
+        tool_names=DEDUPE_TOOLS,
+        write_actions_already=write_actions,
+    )
+
+
 def run_agent_body(issue_id) -> dict:
     """Main worker body. Called by ``ai.tasks.run_agent_on_workitem``.
 
-    Returns a dict summarising what happened — not used by Celery,
-    but very handy for tests and for ad-hoc invocation. The
-    Celery-level retry policy lives on the task wrapper, not here.
+    Runs the autonomous scenarios in sequence for one trigger fire:
+
+      1. **Triage** (TZ 5.3) — first-time classification.
+      2. **Dedupe** (TZ 5.4) — judge-pass over RAG candidates.
+
+    Each scenario has its own ``already_*`` idempotency gate so a
+    re-trigger (human edit) does not re-run a scenario whose
+    durable side-effect already landed. Returns a summary dict —
+    not used by Celery but invaluable for tests and ad-hoc runs.
     """
     issue = _issue_for(issue_id)
     if issue is None:
@@ -536,11 +790,8 @@ def run_agent_body(issue_id) -> dict:
         logger.info("agent_worker: ws %s has no AI config", issue.workspace_id)
         return {"status": "skipped", "reason": "no_config"}
 
-    # Budget gate. Mirrors the same rule the view-layer ``require_ai_
-    # budget`` decorator enforces — but this code path bypasses HTTP,
-    # so we re-check here. A budget-exhausted workspace silently
-    # drops the run (the trigger has already enqueued; we don't want
-    # to retry forever).
+    # Budget gate. Mirrors the view-layer ``require_ai_budget``
+    # decorator — but this code path bypasses HTTP, so we re-check.
     used = tokens_used_this_month(issue.workspace_id)
     if used >= cfg.monthly_token_budget:
         logger.warning(
@@ -553,152 +804,60 @@ def run_agent_body(issue_id) -> dict:
 
     agent = _agent_for(issue)
     if agent is None:
-        # Trigger may have fired on the ``ai-agent`` label alone (no
-        # assignee). Without a concrete agent row we don't have a
-        # ``user`` to write Plane records under or to log against.
-        logger.info(
-            "agent_worker: no enabled AIAgent for issue %s", issue.id
-        )
+        # Trigger fired on the ``ai-agent`` label alone (no
+        # assignee). No concrete agent row → no user to write
+        # records under.
+        logger.info("agent_worker: no enabled AIAgent for issue %s", issue.id)
         return {"status": "skipped", "reason": "no_agent"}
 
-    # Scenario selection (TZ 5.3 is the only one currently
-    # implemented; 5.4 / 5.5 will plug into this branch). For now:
-    # "first-time triage", gated on the audit log — a second pass on
-    # an already-triaged issue is a no-op so a human edit that
-    # re-fires the trigger doesn't re-classify behind their back.
-    if already_triaged(issue.id):
-        logger.info("agent_worker: issue %s already triaged, skipping", issue.id)
-        return {"status": "skipped", "reason": "already_triaged"}
-
-    # RAG context for the agent's own project.
-    context_chunks = retrieve(
-        workspace_id=issue.workspace_id,
-        user=agent.user,
-        query=f"{issue.name}\n\n{issue.description_stripped or ''}",
-        cfg=cfg,
-        top_k=8,
-    )
-    context_chunks = [
-        c for c in context_chunks if c.project_id == str(issue.project_id)
-    ]
-    context = build_context(context_chunks)
-
-    # Triage prompt is purpose-built: it preloads the project's
-    # existing label names and active member emails so the model
-    # picks from a real menu (the apply handlers also validate, but
-    # showing the menu cuts wasted Claude turns on hallucinated
-    # names).
-    label_names = _project_label_names(issue.project_id)
-    member_emails = _project_member_emails(
-        issue.project_id, exclude_user_id=agent.user_id
-    )
-    user_prompt = build_triage_prompt(
-        issue,
-        context=context,
-        label_names=label_names,
-        member_emails=member_emails,
-    )
-    system_prompt = TRIAGE_SYSTEM
-    # Only the triage-scenario tools are offered to the model;
-    # ``update_description`` (in the worker's full white-list) is
-    # deliberately not part of triage.
-    tool_schemas = [
-        s for s in AGENT_TOOL_SCHEMAS if s["name"] in TRIAGE_TOOLS
-    ]
-    chat = providers.ClaudeChat(api_key=cfg.anthropic_key)
-
-    messages: list[dict[str, Any]] = [
-        {"role": "user", "content": user_prompt}
-    ]
-    action_logs: list[AIAgentActionLog] = []
-    write_actions = 0
+    scenarios_run: list[str] = []
+    all_actions: list[AIAgentActionLog] = []
     final_text: str | None = None
+    write_actions = 0
 
-    # `agent_acting` keeps the assignment/label post_save trigger
-    # from re-enqueueing while we write. Stays held for the whole
-    # loop, not just per-tool — one Claude turn can yield multiple
-    # tool_use blocks each of which writes.
+    # `agent_acting` spans BOTH scenarios — one trigger fire = one
+    # held flag — so neither scenario's writes accidentally enqueue
+    # another agent run.
     with agent_acting(issue.id):
-        for step in range(AGENT_MAX_STEPS):
-            resp = chat.complete(
-                system=system_prompt,
-                messages=messages,
-                tools=tool_schemas,
-                model=cfg.chat_model or providers.CHAT_MODEL,
-                max_tokens=1024,
-                temperature=0.1,
+        if not already_triaged(issue.id):
+            logs, text, write_actions = _run_triage_scenario(
+                issue=issue, agent=agent, cfg=cfg, write_actions=write_actions
             )
-            record_usage(
-                workspace_id=issue.workspace_id,
-                user_id=agent.user_id,
-                feature=AIUsageLog.FEATURE_AGENT,
-                model=cfg.chat_model or providers.CHAT_MODEL,
-                usage=resp.usage,
+            scenarios_run.append("triage")
+            all_actions.extend(logs)
+            final_text = text
+
+        if not already_deduped(issue.id):
+            logs, text, write_actions = _run_dedupe_scenario(
+                issue=issue, agent=agent, cfg=cfg, write_actions=write_actions
             )
+            if logs or text:
+                scenarios_run.append("dedupe")
+                all_actions.extend(logs)
+                final_text = text or final_text
 
-            tool_uses = [b for b in resp.content if getattr(b, "type", None) == "tool_use"]
-            if not tool_uses:
-                final_text = "".join(
-                    getattr(b, "text", "") for b in resp.content
-                    if getattr(b, "type", None) == "text"
-                )
-                break
-
-            messages.append({"role": "assistant", "content": resp.content})
-            results: list[dict[str, Any]] = []
-            for tu in tool_uses:
-                if write_actions >= AGENT_MAX_ACTIONS:
-                    # Budget guard for actions — return a synthetic
-                    # tool_result so the model knows we hit the cap
-                    # rather than silently dropping its call.
-                    results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tu.id,
-                        "content": json.dumps({"error": "action_cap_reached"}),
-                        "is_error": True,
-                    })
-                    continue
-
-                log = apply_agent_action(
-                    agent=agent,
-                    issue=issue,
-                    tool_name=tu.name,
-                    tool_input=dict(tu.input or {}),
-                    cfg=cfg,
-                )
-                action_logs.append(log)
-                # find_work_items is read-only; everything else
-                # consumes one slot of the action budget.
-                if tu.name != "find_work_items":
-                    write_actions += 1
-
-                if log.status == AIAgentActionLog.STATUS_APPLIED:
-                    body = json.dumps(log.output)
-                    is_error = False
-                else:
-                    body = json.dumps({"error": log.error, "status": log.status})
-                    is_error = True
-                results.append({
-                    "type": "tool_result",
-                    "tool_use_id": tu.id,
-                    "content": body,
-                    "is_error": is_error,
-                })
-
-            messages.append({"role": "user", "content": results})
+    if not scenarios_run:
+        # Both scenarios skipped because their idempotency gates
+        # said the work was already done.
+        return {
+            "status": "skipped",
+            "reason": "all_scenarios_idempotent",
+            "issue_id": str(issue.id),
+        }
 
     return {
         "status": "ok",
         "issue_id": str(issue.id),
-        "actions": len(action_logs),
+        "scenarios": scenarios_run,
+        "actions": len(all_actions),
         "applied": sum(
-            1 for a in action_logs if a.status == AIAgentActionLog.STATUS_APPLIED
+            1 for a in all_actions if a.status == AIAgentActionLog.STATUS_APPLIED
         ),
         "rejected": sum(
-            1 for a in action_logs if a.status == AIAgentActionLog.STATUS_REJECTED
+            1 for a in all_actions if a.status == AIAgentActionLog.STATUS_REJECTED
         ),
         "errored": sum(
-            1 for a in action_logs if a.status == AIAgentActionLog.STATUS_ERROR
+            1 for a in all_actions if a.status == AIAgentActionLog.STATUS_ERROR
         ),
         "final_text": final_text,
     }
