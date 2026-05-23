@@ -9,6 +9,8 @@
 
 import { useCallback, useState } from "react";
 
+import { csrfHeaders } from "./csrf";
+
 export type AgentAction = {
   tool: string;
   args: Record<string, unknown>;
@@ -49,11 +51,14 @@ export function useAIAgent(workspaceId: string): UseAIAgentResult {
       setError(null);
       setResult(null);
       try {
+        const headers = await csrfHeaders({
+          "Content-Type": "application/json",
+        });
         const resp = await fetch(
           `/api/ai/workspaces/${workspaceId}/agent/execute/`,
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers,
             credentials: "same-origin",
             body: JSON.stringify({ prompt: text }),
           }

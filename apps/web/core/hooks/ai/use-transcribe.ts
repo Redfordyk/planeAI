@@ -5,6 +5,8 @@
 
 import { useCallback, useState } from "react";
 
+import { csrfHeaders } from "./csrf";
+
 export type UseTranscribeResult = {
   loading: boolean;
   error: string | null;
@@ -24,9 +26,12 @@ export function useTranscribe(workspaceId: string): UseTranscribeResult {
         const ext = audio.type.includes("mp4") ? "m4a" : "webm";
         fd.append("audio", audio, `clip.${ext}`);
         fd.append("language", language);
+        // DON'T set Content-Type — let the browser add the
+        // multipart boundary. csrfHeaders() only adds X-CSRFToken.
+        const headers = await csrfHeaders();
         const resp = await fetch(
           `/api/ai/workspaces/${workspaceId}/transcribe/`,
-          { method: "POST", body: fd, credentials: "same-origin" }
+          { method: "POST", body: fd, headers, credentials: "same-origin" }
         );
         if (!resp.ok) {
           const body = await resp.json().catch(() => ({}));

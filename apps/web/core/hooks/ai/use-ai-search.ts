@@ -20,6 +20,8 @@
 
 import { useCallback, useRef, useState } from "react";
 
+import { csrfHeaders } from "./csrf";
+
 export type SearchSource = {
   source_type: "work_item" | "comment" | "page";
   source_id: string;
@@ -65,9 +67,12 @@ export function useAISearch(workspaceId: string): UseAISearchResult {
 
       let resp: Response;
       try {
+        const headers = await csrfHeaders({
+          "Content-Type": "application/json",
+        });
         resp = await fetch(`/api/ai/workspaces/${workspaceId}/search/`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({ query, top_k: opts.topK ?? 20 }),
           credentials: "same-origin",
           signal: controller.signal,

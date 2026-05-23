@@ -7,14 +7,13 @@
  *   - "Агент"  — natural-language project / issue creation. Runs the
  *                tool-use loop server-side (useAIAgent).
  *
- * Both modes share a single composer with text input + microphone
- * button. The mic uses MediaRecorder (useVoiceRecorder), uploads the
- * blob to /api/ai/.../transcribe/ (useTranscribe), and drops the
- * transcript into the input — user reviews, edits if needed, then
- * presses Send.
+ * Both modes share a composer with text input + microphone button.
+ * The mic uses MediaRecorder (useVoiceRecorder), uploads the blob to
+ * /api/ai/.../transcribe/ (useTranscribe), and drops the transcript
+ * into the input — user reviews, edits, then presses Send.
  *
  * AISearchPanel at the bottom of this file is the slide-over wrapper
- * mounted from the top navigation (TZ 2.6 + voice expansion).
+ * mounted from the top navigation.
  */
 
 import { useCallback, useMemo, useState } from "react";
@@ -27,10 +26,8 @@ import { useVoiceRecorder } from "../../hooks/ai/use-voice-recorder";
 
 export type AISearchProps = {
   workspaceId: string;
-  /** Plane workspace slug — used to build links to work items. */
   workspaceSlug: string;
   className?: string;
-  /** Initial tab. Default: "search". */
   initialMode?: "search" | "agent";
 };
 
@@ -45,14 +42,10 @@ export function AISearch({
   const [mode, setMode] = useState<Mode>(initialMode);
   const [draft, setDraft] = useState("");
 
-  // Search-mode plumbing
   const { answer, sources, status, error: searchErr, search, cancel } =
     useAISearch(workspaceId);
-  // Index status drives both the input-disabled gate and the banner.
-  // We poll while it's filling and stop on ready=true (hook handles it).
   const { data: index, loading: indexLoading } = useIndexStatus(workspaceId, 5000);
 
-  // Agent-mode plumbing
   const {
     result: agentResult,
     loading: agentLoading,
@@ -61,16 +54,12 @@ export function AISearch({
     reset: resetAgent,
   } = useAIAgent(workspaceId);
 
-  // Voice — mic + Whisper
   const voice = useVoiceRecorder();
   const { loading: transcribing, error: transcribeErr, transcribe } = useTranscribe(workspaceId);
 
   const isStreaming = status === "streaming";
-  // Search mode requires a ready index; agent mode does not (it
-  // doesn't query embeddings, it only creates things).
   const indexReady = index?.ready ?? true;
-  const inputDisabled =
-    mode === "search" ? !indexReady : false;
+  const inputDisabled = mode === "search" ? !indexReady : false;
   const busy = isStreaming || agentLoading || voice.state !== "idle" || transcribing;
   const canSubmit = draft.trim().length > 0 && !busy && !inputDisabled;
 
@@ -80,7 +69,6 @@ export function AISearch({
       if (!blob) return;
       const text = await transcribe(blob);
       if (text) {
-        // Append (don't replace) so a user can dictate over a typed prefix.
         setDraft((prev) => (prev ? `${prev.trim()} ${text}` : text));
       }
     } else if (voice.state === "idle") {
@@ -103,108 +91,175 @@ export function AISearch({
     [draft, mode, search, runAgent, resetAgent]
   );
 
-  const onChangeMode = useCallback((next: Mode) => {
-    setMode(next);
-    // Don't clear draft — user may want to send the same text in
-    // either mode (e.g. "что известно про X" — search, then "создай
-    // проект X с задачами Y и Z" — agent).
-  }, []);
-
   const error =
     mode === "search" ? searchErr : agentErr || transcribeErr || voice.error;
 
   return (
-    <div className={`flex flex-col gap-3 p-4 ${className}`}>
-      <ModeToggle mode={mode} onChange={onChangeMode} />
+    <div className={`flex h-full flex-col gap-4 px-5 py-5 ${className}`}>
+      <ModeToggle mode={mode} onChange={setMode} />
 
       {mode === "search" && (
         <IndexBanner index={index ?? null} loading={indexLoading} />
       )}
 
-      <form onSubmit={onSubmit} className="flex gap-2">
-        <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={
-            mode === "search"
-              ? "Спросите по задачам, комментариям, страницам…"
-              : "Например: «создай проект Маркетинг и в нём задачу „Сайт“ исполнитель Илья»"
-          }
-          disabled={inputDisabled || voice.state !== "idle"}
-          className="flex-1 rounded border border-custom-border-200 bg-custom-background-90 px-3 py-2 text-sm outline-none focus:border-custom-primary-100 disabled:opacity-50"
-        />
-        <MicButton
-          state={voice.state}
-          transcribing={transcribing}
-          durationMs={voice.durationMs}
-          onClick={onMicToggle}
-          disabled={busy && voice.state === "idle"}
-        />
-        {isStreaming ? (
-          <button
-            type="button"
-            onClick={cancel}
-            className="rounded bg-custom-background-80 px-3 py-2 text-sm hover:bg-custom-background-70"
-          >
-            Стоп
-          </button>
+      <Composer
+        draft={draft}
+        setDraft={setDraft}
+        mode={mode}
+        inputDisabled={inputDisabled}
+        voice={voice}
+        transcribing={transcribing}
+        onMicToggle={onMicToggle}
+        onSubmit={onSubmit}
+        isStreaming={isStreaming}
+        canSubmit={canSubmit}
+        onCancel={cancel}
+      />
+
+      {error && <ErrorBanner message={error} />}
+
+      <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+        {mode === "search" ? (
+          <AnswerPanel
+            answer={answer}
+            sources={sources}
+            workspaceSlug={workspaceSlug}
+            status={status}
+          />
         ) : (
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className="rounded bg-custom-primary-100 px-3 py-2 text-sm text-white hover:bg-custom-primary-200 disabled:opacity-50"
-          >
-            {mode === "search" ? "Спросить" : "Выполнить"}
-          </button>
+          <AgentPanel
+            loading={agentLoading}
+            result={agentResult}
+            workspaceSlug={workspaceSlug}
+          />
         )}
-      </form>
-
-      {error && (
-        <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {mode === "search" ? (
-        <AnswerPanel
-          answer={answer}
-          sources={sources}
-          workspaceSlug={workspaceSlug}
-          status={status}
-        />
-      ) : (
-        <AgentPanel
-          loading={agentLoading}
-          result={agentResult}
-          workspaceSlug={workspaceSlug}
-        />
-      )}
+      </div>
     </div>
   );
 }
 
 // --- mode toggle ----------------------------------------------------------
 
-function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
-  const item = (val: Mode, label: string) => (
-    <button
-      type="button"
-      onClick={() => onChange(val)}
-      className={`flex-1 rounded px-3 py-1.5 text-xs font-medium transition-colors ${
-        mode === val
-          ? "bg-custom-primary-100 text-white"
-          : "bg-custom-background-80 text-custom-text-200 hover:bg-custom-background-70"
-      }`}
-    >
-      {label}
-    </button>
-  );
+function ModeToggle({
+  mode,
+  onChange,
+}: {
+  mode: Mode;
+  onChange: (m: Mode) => void;
+}) {
+  const item = (val: Mode, label: string, icon: string, hint: string) => {
+    const active = mode === val;
+    return (
+      <button
+        type="button"
+        onClick={() => onChange(val)}
+        className={`group flex-1 rounded-lg px-4 py-3 text-left transition-all ${
+          active
+            ? "bg-custom-primary-100 text-white shadow-md"
+            : "bg-custom-background-90 text-custom-text-200 hover:bg-custom-background-80"
+        }`}
+      >
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <span className="text-lg leading-none">{icon}</span>
+          <span>{label}</span>
+        </div>
+        <div className={`mt-0.5 text-[11px] leading-tight ${active ? "text-white/80" : "text-custom-text-300"}`}>
+          {hint}
+        </div>
+      </button>
+    );
+  };
   return (
-    <div className="flex gap-1 rounded bg-custom-background-90 p-1">
-      {item("search", "🔍 Поиск")}
-      {item("agent", "⚙️ Агент")}
+    <div className="flex gap-2">
+      {item("search", "Поиск", "🔍", "Спросить по задачам")}
+      {item("agent", "Агент", "⚙️", "Создать проект/задачи")}
     </div>
+  );
+}
+
+// --- composer (input + mic + submit) --------------------------------------
+
+function Composer({
+  draft,
+  setDraft,
+  mode,
+  inputDisabled,
+  voice,
+  transcribing,
+  onMicToggle,
+  onSubmit,
+  isStreaming,
+  canSubmit,
+  onCancel,
+}: {
+  draft: string;
+  setDraft: (v: string) => void;
+  mode: Mode;
+  inputDisabled: boolean;
+  voice: ReturnType<typeof useVoiceRecorder>;
+  transcribing: boolean;
+  onMicToggle: () => void;
+  onSubmit: (e?: React.FormEvent) => void;
+  isStreaming: boolean;
+  canSubmit: boolean;
+  onCancel: () => void;
+}) {
+  return (
+    <form onSubmit={onSubmit} className="flex flex-col gap-2">
+      <div className="relative flex items-stretch rounded-xl border border-custom-border-200 bg-custom-background-90 focus-within:border-custom-primary-100 focus-within:ring-2 focus-within:ring-custom-primary-100/20 transition-colors">
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              if (canSubmit) onSubmit();
+            }
+          }}
+          placeholder={
+            mode === "search"
+              ? "Спросите по задачам, комментариям, страницам…"
+              : "Например: «создай проект Маркетинг и в нём задачи: лендинг, тексты, аналитика. Назначь Илью»"
+          }
+          disabled={inputDisabled || voice.state !== "idle"}
+          rows={2}
+          className="flex-1 resize-none bg-transparent px-4 py-3 text-sm leading-snug outline-none placeholder:text-custom-text-300 disabled:opacity-50"
+        />
+        <div className="flex items-end gap-1 px-2 pb-2">
+          <MicButton
+            state={voice.state}
+            transcribing={transcribing}
+            durationMs={voice.durationMs}
+            onClick={onMicToggle}
+            disabled={inputDisabled}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between text-[11px] text-custom-text-300">
+        <span>
+          <kbd className="rounded border border-custom-border-200 px-1.5 py-0.5 font-mono">Enter</kbd>
+          {" "}— отправить, <kbd className="rounded border border-custom-border-200 px-1.5 py-0.5 font-mono">Shift+Enter</kbd> — перенос строки
+        </span>
+        {isStreaming ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md bg-custom-background-80 px-3 py-1.5 text-xs font-medium hover:bg-custom-background-70"
+          >
+            ⏹ Стоп
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className="rounded-md bg-gradient-to-r from-custom-primary-100 to-custom-primary-200 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {mode === "search" ? "Спросить →" : "Выполнить →"}
+          </button>
+        )}
+      </div>
+    </form>
   );
 }
 
@@ -226,35 +281,60 @@ function MicButton({
   const recording = state === "recording";
   const processing = state === "processing" || state === "requesting" || transcribing;
   const seconds = Math.floor(durationMs / 1000);
-  const label = recording
-    ? `⏺ ${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`
-    : processing
-      ? "…"
-      : "🎙";
+  const timer = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
   const title = recording
     ? "Нажмите, чтобы остановить запись"
     : processing
       ? "Распознаём…"
       : "Запись голосом";
+
+  if (recording) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        title={title}
+        aria-label={title}
+        className="flex h-9 items-center gap-1.5 rounded-md bg-red-500 px-3 text-xs font-mono text-white shadow-sm animate-pulse"
+      >
+        <span className="h-2 w-2 rounded-full bg-white" />
+        {timer}
+      </button>
+    );
+  }
+  if (processing) {
+    return (
+      <button
+        type="button"
+        disabled
+        title={title}
+        aria-label={title}
+        className="flex h-9 w-9 items-center justify-center rounded-md bg-custom-background-80 text-custom-text-300"
+      >
+        <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-custom-text-300 border-t-transparent" />
+      </button>
+    );
+  }
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled || processing}
+      disabled={disabled}
       title={title}
       aria-label={title}
-      className={`rounded px-3 py-2 text-sm transition-colors ${
-        recording
-          ? "bg-red-500/20 text-red-600 hover:bg-red-500/30 animate-pulse"
-          : "bg-custom-background-80 text-custom-text-200 hover:bg-custom-background-70"
-      } disabled:opacity-50`}
+      className="flex h-9 w-9 items-center justify-center rounded-md bg-custom-background-80 text-custom-text-200 hover:bg-custom-background-70 hover:text-custom-primary-100 disabled:opacity-40"
     >
-      {label}
+      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 1a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3Z"/>
+        <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
+        <line x1="12" y1="18" x2="12" y2="22"/>
+        <line x1="8" y1="22" x2="16" y2="22"/>
+      </svg>
     </button>
   );
 }
 
-// --- index status banner ---------------------------------------------------
+// --- index banner ---------------------------------------------------------
 
 function IndexBanner({
   index,
@@ -265,7 +345,7 @@ function IndexBanner({
 }) {
   if (loading && !index) {
     return (
-      <div className="rounded bg-custom-background-90 px-3 py-2 text-xs text-custom-text-300">
+      <div className="rounded-lg bg-custom-background-90 px-3 py-2 text-xs text-custom-text-300">
         Загрузка статуса индексации…
       </div>
     );
@@ -273,26 +353,37 @@ function IndexBanner({
   if (!index) return null;
   if (index.total === 0) {
     return (
-      <div className="rounded bg-custom-background-90 px-3 py-2 text-xs text-custom-text-300">
-        В воркспейсе пока нет задач для индексации. Поиск будет полезен после создания первой задачи.
+      <div className="rounded-lg border border-custom-border-100 bg-custom-background-90 px-3 py-2 text-xs text-custom-text-300">
+        В воркспейсе пока нет задач для индексации. Поиск заработает после первой задачи.
       </div>
     );
   }
   if (index.ready) {
     return (
-      <div className="rounded bg-green-50 px-3 py-2 text-xs text-green-700">
-        Индекс готов ({index.indexed}/{index.total}, {Math.round(index.coverage * 100)}%).
+      <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700 dark:border-green-900 dark:bg-green-950 dark:text-green-300">
+        <span>✓</span>
+        <span>Индекс готов: {index.indexed} из {index.total} ({Math.round(index.coverage * 100)}%)</span>
       </div>
     );
   }
   return (
-    <div className="rounded bg-yellow-50 px-3 py-2 text-xs text-yellow-800">
-      <div className="mb-1">
-        Идёт индексация: {index.indexed}/{index.total} ({Math.round(index.coverage * 100)}%). Поиск временно выключен — вернитесь через минуту.
+    <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-200">
+      <div className="mb-1 flex items-center justify-between">
+        <span>⏳ Индексация: {index.indexed}/{index.total} ({Math.round(index.coverage * 100)}%)</span>
+        <span className="text-[10px] opacity-70">Поиск временно выключен</span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded bg-yellow-100">
-        <div className="h-full bg-yellow-400 transition-all" style={{ width: `${index.coverage * 100}%` }} />
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-yellow-100 dark:bg-yellow-900">
+        <div className="h-full bg-yellow-500 transition-all" style={{ width: `${index.coverage * 100}%` }} />
       </div>
+    </div>
+  );
+}
+
+function ErrorBanner({ message }: { message: string }) {
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+      <span aria-hidden="true">⚠️</span>
+      <span className="flex-1">{message}</span>
     </div>
   );
 }
@@ -311,15 +402,11 @@ function AnswerPanel({
   status: string;
 }) {
   if (status === "idle" && !answer && sources.length === 0) {
-    return (
-      <div className="rounded bg-custom-background-90 px-3 py-4 text-sm text-custom-text-300">
-        Введите запрос — ответ соберётся из ваших задач и комментариев.
-      </div>
-    );
+    return <EmptyState mode="search" />;
   }
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-[1fr_220px]">
-      <article className="prose prose-sm max-w-none rounded border border-custom-border-200 bg-custom-background-90 p-4 text-sm">
+    <div className="flex flex-col gap-4 md:grid md:grid-cols-[1fr_220px] md:gap-4">
+      <article className="prose prose-sm max-w-none rounded-xl border border-custom-border-200 bg-custom-background-90 p-4 text-sm leading-relaxed">
         <RenderedAnswer text={answer} />
         {status === "streaming" && (
           <span className="ml-1 inline-block h-3 w-2 animate-pulse bg-custom-text-300 align-middle" />
@@ -330,18 +417,41 @@ function AnswerPanel({
   );
 }
 
+function EmptyState({ mode }: { mode: Mode }) {
+  if (mode === "search") {
+    return (
+      <div className="rounded-xl border border-dashed border-custom-border-200 bg-custom-background-90 px-4 py-8 text-center">
+        <div className="text-3xl">💡</div>
+        <div className="mt-2 text-sm font-medium text-custom-text-200">Спросите что-нибудь по проекту</div>
+        <div className="mt-1 text-xs text-custom-text-300">
+          Например: «что известно про новый релиз?», «какие задачи у Ильи?»
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-dashed border-custom-border-200 bg-custom-background-90 px-4 py-8 text-center">
+      <div className="text-3xl">✨</div>
+      <div className="mt-2 text-sm font-medium text-custom-text-200">ИИ-агент создаст проект и задачи</div>
+      <div className="mt-1 text-xs text-custom-text-300">
+        Например: «создай проект „Маркетинг“ и в нём задачи: лендинг, тексты, аналитика. Назначь Илью».
+      </div>
+    </div>
+  );
+}
+
 function SourcesSidebar({ sources, workspaceSlug }: { sources: SearchSource[]; workspaceSlug: string }) {
   if (!sources.length) {
     return (
-      <aside className="rounded border border-custom-border-200 bg-custom-background-90 p-3 text-xs text-custom-text-300">
+      <aside className="rounded-xl border border-dashed border-custom-border-200 bg-custom-background-90 p-3 text-xs text-custom-text-300">
         Источники появятся здесь
       </aside>
     );
   }
   return (
-    <aside className="rounded border border-custom-border-200 bg-custom-background-90 p-3 text-xs">
-      <div className="mb-2 font-medium text-custom-text-200">Источники</div>
-      <ul className="flex flex-col gap-1">
+    <aside className="rounded-xl border border-custom-border-200 bg-custom-background-90 p-3 text-xs">
+      <div className="mb-2 font-semibold text-custom-text-200">Источники</div>
+      <ul className="flex flex-col gap-1.5">
         {sources.map((s) => (
           <li key={`${s.source_type}:${s.source_id}`}>
             <SourceLink source={s} workspaceSlug={workspaceSlug} />
@@ -355,11 +465,11 @@ function SourcesSidebar({ sources, workspaceSlug }: { sources: SearchSource[]; w
 function sourceLabel(s: SearchSource): string {
   switch (s.source_type) {
     case "work_item":
-      return `Задача · ${s.source_id.slice(0, 8)}`;
+      return `🎯 Задача · ${s.source_id.slice(0, 8)}`;
     case "comment":
-      return `Комментарий · ${s.source_id.slice(0, 8)}`;
+      return `💬 Комментарий · ${s.source_id.slice(0, 8)}`;
     case "page":
-      return `Страница · ${s.source_id.slice(0, 8)}`;
+      return `📄 Страница · ${s.source_id.slice(0, 8)}`;
     default:
       return s.source_id.slice(0, 8);
   }
@@ -378,7 +488,7 @@ function SourceLink({ source, workspaceSlug }: { source: SearchSource; workspace
   const href = sourceHref(source, workspaceSlug);
   if (!href) return <span className="text-custom-text-300">{sourceLabel(source)}</span>;
   return (
-    <a href={href} className="text-custom-primary-100 hover:underline" target="_blank" rel="noreferrer">
+    <a href={href} className="block rounded px-1.5 py-1 text-custom-primary-100 hover:bg-custom-background-80 hover:underline" target="_blank" rel="noreferrer">
       {sourceLabel(source)}
     </a>
   );
@@ -397,29 +507,29 @@ function AgentPanel({
 }) {
   if (loading) {
     return (
-      <div className="rounded bg-custom-background-90 px-3 py-4 text-sm text-custom-text-300">
-        <span className="animate-pulse">⚙️ Агент работает… выполняет шаги, создаёт проекты и задачи.</span>
+      <div className="flex items-center gap-3 rounded-xl border border-custom-border-200 bg-custom-background-90 px-4 py-6 text-sm">
+        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-custom-primary-100 border-t-transparent" />
+        <span className="text-custom-text-200">⚙️ Агент работает… выполняет шаги, создаёт проекты и задачи.</span>
       </div>
     );
   }
   if (!result) {
-    return (
-      <div className="rounded bg-custom-background-90 px-3 py-4 text-sm text-custom-text-300">
-        Опишите задачу — например: «создай проект „Маркетинг“ и в нём задачи: дизайн лендинга, тексты, аналитика. Назначь исполнителя Илья».
-      </div>
-    );
+    return <EmptyState mode="agent" />;
   }
   return (
     <div className="flex flex-col gap-3">
-      <article className="prose prose-sm max-w-none rounded border border-custom-border-200 bg-custom-background-90 p-4 text-sm whitespace-pre-wrap">
+      <article className="rounded-xl border border-custom-border-200 bg-custom-background-90 p-4 text-sm leading-relaxed whitespace-pre-wrap">
         {result.reply}
       </article>
       {result.actions.length > 0 && (
-        <details className="rounded border border-custom-border-200 bg-custom-background-90 p-3 text-xs" open>
-          <summary className="cursor-pointer text-custom-text-200">
-            Действия ({result.actions.length}) · {result.turns} шаг{result.turns === 1 ? "" : result.turns < 5 ? "а" : "ов"} · ${result.total_cost_usd}
+        <details
+          className="rounded-xl border border-custom-border-200 bg-custom-background-90 p-3 text-xs"
+          open
+        >
+          <summary className="cursor-pointer text-custom-text-200 select-none">
+            <span className="font-semibold">Действия</span> · {result.actions.length} вызов{plural(result.actions.length, "", "а", "ов")} · {result.turns} шаг{plural(result.turns, "", "а", "ов")} · ${result.total_cost_usd}
           </summary>
-          <ul className="mt-2 flex flex-col gap-1">
+          <ul className="mt-2 flex flex-col gap-1.5">
             {result.actions.map((a, i) => (
               <ActionLine key={i} action={a} workspaceSlug={workspaceSlug} />
             ))}
@@ -428,6 +538,15 @@ function AgentPanel({
       )}
     </div>
   );
+}
+
+function plural(n: number, one: string, few: string, many: string): string {
+  const a = Math.abs(n) % 100;
+  const b = a % 10;
+  if (a > 10 && a < 20) return many;
+  if (b > 1 && b < 5) return few;
+  if (b === 1) return one;
+  return many;
 }
 
 function ActionLine({ action, workspaceSlug }: { action: AgentAction; workspaceSlug: string }) {
@@ -447,10 +566,10 @@ function ActionLine({ action, workspaceSlug }: { action: AgentAction; workspaceS
       : null;
   } else if (action.tool === "list_projects" && ok) {
     const ps = (result["projects"] as unknown[]) ?? [];
-    summary = `👁 Прочитал список проектов (${ps.length})`;
+    summary = `👁 Список проектов (${ps.length})`;
   } else if (action.tool === "list_members" && ok) {
     const ms = (result["members"] as unknown[]) ?? [];
-    summary = `👁 Прочитал список участников (${ms.length})`;
+    summary = `👁 Список участников (${ms.length})`;
   } else if (!ok) {
     summary = `⚠️ ${action.tool}: ${String(result["error"] ?? "ошибка")}`;
   } else {
@@ -458,7 +577,7 @@ function ActionLine({ action, workspaceSlug }: { action: AgentAction; workspaceS
   }
 
   return (
-    <li className={ok ? "text-custom-text-200" : "text-yellow-700"}>
+    <li className={ok ? "text-custom-text-200" : "text-yellow-700 dark:text-yellow-300"}>
       {href ? (
         <a href={href} className="hover:underline" target="_blank" rel="noreferrer">
           {summary}
@@ -521,7 +640,7 @@ function ProseSegment({ text }: { text: string }) {
         ) : (
           <span
             key={i}
-            className="rounded bg-custom-background-80 px-1 text-xs text-custom-text-300"
+            className="rounded bg-custom-background-80 px-1.5 py-0.5 text-[11px] font-mono text-custom-text-300"
             title="Источник в правой колонке"
           >
             {p.raw}
@@ -547,20 +666,36 @@ export function AISearchPanel({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/30">
-      <div className="h-full w-full max-w-2xl overflow-y-auto bg-custom-background-100 shadow-xl">
-        <div className="flex items-center justify-between border-b border-custom-border-200 px-4 py-3">
-          <div className="text-sm font-medium text-custom-text-200">ИИ-помощник</div>
+    <div
+      className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="flex h-full w-full max-w-2xl flex-col bg-custom-background-100 shadow-2xl">
+        <header className="flex items-center justify-between border-b border-custom-border-200 px-5 py-3">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">✨</span>
+            <div>
+              <div className="text-sm font-semibold text-custom-text-100">ИИ-помощник</div>
+              <div className="text-[11px] text-custom-text-300">DeepSeek + OpenAI embeddings</div>
+            </div>
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-custom-text-300 hover:text-custom-text-100"
+            className="rounded-md p-1.5 text-custom-text-300 hover:bg-custom-background-80 hover:text-custom-text-100"
             aria-label="Закрыть"
           >
-            ✕
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
           </button>
+        </header>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <AISearch workspaceId={workspaceId} workspaceSlug={workspaceSlug} />
         </div>
-        <AISearch workspaceId={workspaceId} workspaceSlug={workspaceSlug} />
       </div>
     </div>
   );
