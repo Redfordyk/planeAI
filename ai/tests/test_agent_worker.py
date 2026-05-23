@@ -156,9 +156,12 @@ def test_set_labels_applies_only_same_project_labels(agent_setup, make_project):
 @pytest.mark.django_db
 def test_suggest_assignee_rejects_non_member(agent_setup, make_user, make_workspace_member):
     """A user who exists in the workspace but has no ProjectMember
-    row for THIS project must not be assignable. The model could be
-    tricked by issue text into naming any address — the scope guard
-    catches it."""
+    row for THIS project must not be suggestable. The model could
+    be tricked by issue text into naming any address — the scope
+    guard catches it BEFORE any Plane write happens (no comment
+    leaks for a rejected suggestion)."""
+    from plane.db.models import IssueComment
+
     stranger = make_user("stranger")
     make_workspace_member(workspace=agent_setup.workspace, user=stranger, role=15)
     # Note: NO ProjectMember row for stranger in agent_setup.project.
@@ -172,6 +175,9 @@ def test_suggest_assignee_rejects_non_member(agent_setup, make_user, make_worksp
     )
     assert log.status == AIAgentActionLog.STATUS_REJECTED
     assert "not a member" in log.error
+    # Comment-mode suggest must not leak a comment for a rejection.
+    assert IssueComment.objects.filter(issue_id=agent_setup.issue.id).count() == 0
+    # And nothing got hard-assigned either.
     assert stranger not in list(agent_setup.issue.assignees.all())
 
 
