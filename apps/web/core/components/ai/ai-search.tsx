@@ -556,7 +556,8 @@ function ActionLine({ action, workspaceSlug }: { action: AgentAction; workspaceS
   let href: string | null = null;
 
   if (action.tool === "create_project" && ok) {
-    summary = `📁 Проект «${result["name"]}» (${result["identifier"]})`;
+    const reused = result["reused"] === true;
+    summary = `📁 ${reused ? "Использован существующий" : "Создан"} проект «${result["name"]}» (${result["identifier"]})`;
     href = `/${workspaceSlug}/projects/${result["project_id"]}/issues/`;
   } else if (action.tool === "create_issue" && ok) {
     const priority = result["priority"];

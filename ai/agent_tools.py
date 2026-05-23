@@ -195,8 +195,36 @@ def create_project(user, workspace_id, args: dict[str, Any]) -> dict[str, Any]:
     Project = apps.get_model("db", "Project")
     ProjectMember = apps.get_model("db", "ProjectMember")
 
+    # Plane enforces a unique (workspace_id, name) constraint on
+    # active projects. If a project with the same name already exists,
+    # the friendly outcome is to return it (with a `reused=True` flag
+    # so the agent's reply can mention the fact) — not to raise an
+    # 'internal error' that the LLM has to retry around.
+    existing = Project.objects.filter(
+        workspace_id=workspace_id, name=name[:255], deleted_at__isnull=True
+    ).first()
+    if existing is not None:
+        # Make sure the caller is a project admin so subsequent
+        # create_issue calls in the same agent turn won't be rejected.
+        ProjectMember.objects.update_or_create(
+            workspace_id=workspace_id,
+            project=existing,
+            member=user,
+            defaults={"role": ROLE.ADMIN.value, "is_active": True},
+        )
+        logger.info(
+            "agent.create_project: ws=%s name=%r already exists -> %s (reused)",
+            workspace_id, name, existing.id,
+        )
+        return {
+            "project_id": str(existing.id),
+            "identifier": existing.identifier,
+            "name": existing.name,
+            "reused": True,
+        }
+
     identifier = (args.get("identifier") or _make_identifier(name)).upper()[:5]
-    # ensure unique within workspace
+    # ensure identifier is unique within workspace
     base = identifier
     n = 1
     while Project.objects.filter(
@@ -207,28 +235,54 @@ def create_project(user, workspace_id, args: dict[str, Any]) -> dict[str, Any]:
         if n > 99:
             raise ToolError("could not derive a unique identifier")
 
-    with transaction.atomic():
-        prj = Project.objects.create(
-            workspace_id=workspace_id,
-            name=name[:255],
-            identifier=identifier,
-            description=(args.get("description") or "")[:1000],
-            created_by=user,
-            project_lead=user,
-        )
-        # add the creator as admin so they immediately see it
+    from django.db import IntegrityError
+
+    try:
+        with transaction.atomic():
+            prj = Project.objects.create(
+                workspace_id=workspace_id,
+                name=name[:255],
+                identifier=identifier,
+                description=(args.get("description") or "")[:1000],
+                created_by=user,
+                project_lead=user,
+            )
+            # add the creator as admin so they immediately see it
+            ProjectMember.objects.update_or_create(
+                workspace_id=workspace_id,
+                project=prj,
+                member=user,
+                defaults={"role": ROLE.ADMIN.value, "is_active": True},
+            )
+    except IntegrityError:
+        # Race: another concurrent agent call (or a stale read above)
+        # snuck in. Re-resolve and return as 'reused'.
+        existing = Project.objects.filter(
+            workspace_id=workspace_id, name=name[:255], deleted_at__isnull=True
+        ).first()
+        if existing is None:
+            raise ToolError(
+                f"could not create project '{name}': race-condition couldn't be reconciled"
+            )
         ProjectMember.objects.update_or_create(
             workspace_id=workspace_id,
-            project=prj,
+            project=existing,
             member=user,
             defaults={"role": ROLE.ADMIN.value, "is_active": True},
         )
+        return {
+            "project_id": str(existing.id),
+            "identifier": existing.identifier,
+            "name": existing.name,
+            "reused": True,
+        }
 
     logger.info("agent.create_project: ws=%s user=%s -> %s", workspace_id, user.id, prj.id)
     return {
         "project_id": str(prj.id),
         "identifier": prj.identifier,
         "name": prj.name,
+        "reused": False,
     }
 
 
