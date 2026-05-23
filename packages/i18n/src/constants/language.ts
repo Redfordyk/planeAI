@@ -6,7 +6,10 @@
 
 import type { TLanguage, ILanguageOption } from "../types";
 
-export const FALLBACK_LANGUAGE: TLanguage = "en";
+// planeAI: default to Russian. Users can still switch via the
+// language picker; this only changes the initial choice for first
+// visit (when localStorage has no preference yet).
+export const FALLBACK_LANGUAGE: TLanguage = "ru";
 
 export const SUPPORTED_LANGUAGES: ILanguageOption[] = [
   { label: "English", value: "en" },

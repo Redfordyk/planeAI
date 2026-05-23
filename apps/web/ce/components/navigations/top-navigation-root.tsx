@@ -2,9 +2,15 @@
  * Copyright (c) 2023-present Plane Software, Inc. and contributors
  * SPDX-License-Identifier: AGPL-3.0-only
  * See the LICENSE file for details.
+ *
+ * planeAI:
+ *   - removed StarUsOnGitHubLink import + usage from the top nav.
+ *   - added an "ИИ-помощник" button that toggles AISearchPanel —
+ *     workspace UUID resolved via useWorkspace() from the slug in
+ *     the URL.
  */
 
-// components
+import React, { useState } from "react";
 import { observer } from "mobx-react";
 import { useParams, usePathname } from "next/navigation";
 import { cn } from "@plane/utils";
@@ -18,8 +24,9 @@ import { AppSidebarItem } from "@/components/sidebar/sidebar-item";
 import { InboxIcon } from "@plane/propel/icons";
 import useSWR from "swr";
 import { useWorkspaceNotifications } from "@/hooks/store/notifications";
-// local imports
-import { StarUsOnGitHubLink } from "@/app/(all)/[workspaceSlug]/(projects)/star-us-link";
+import { useWorkspace } from "@/hooks/store/use-workspace";
+// planeAI
+import { AISearchPanel } from "@/components/ai";
 
 export const TopNavigationRoot = observer(function TopNavigationRoot() {
   // router
@@ -29,6 +36,13 @@ export const TopNavigationRoot = observer(function TopNavigationRoot() {
   // store hooks
   const { unreadNotificationsCount, getUnreadNotificationsCount } = useWorkspaceNotifications();
   const { preferences } = useAppRailPreferences();
+  const { getWorkspaceBySlug } = useWorkspace();
+
+  // planeAI: visible AI panel state
+  const [aiOpen, setAiOpen] = useState(false);
+  const slugStr = workspaceSlug?.toString() ?? "";
+  const currentWorkspace = slugStr ? getWorkspaceBySlug(slugStr) : null;
+  const currentWorkspaceId = (currentWorkspace as { id?: string } | null)?.id ?? "";
 
   const showLabel = preferences.displayMode === "icon_with_label";
 
@@ -60,6 +74,20 @@ export const TopNavigationRoot = observer(function TopNavigationRoot() {
       </div>
       {/* Additional Actions */}
       <div className="flex flex-1 shrink-0 items-center justify-end gap-1">
+        {/* planeAI: prominent AI assistant entry */}
+        {currentWorkspaceId && (
+          <Tooltip tooltipContent="ИИ-помощник" position="bottom">
+            <button
+              type="button"
+              onClick={() => setAiOpen(true)}
+              className="flex h-8 items-center gap-1.5 rounded-md bg-custom-primary-100/10 px-2.5 text-xs font-medium text-custom-primary-100 hover:bg-custom-primary-100/20 transition-colors"
+              aria-label="Открыть ИИ-помощника"
+            >
+              <span aria-hidden="true">✨</span>
+              <span>ИИ</span>
+            </button>
+          </Tooltip>
+        )}
         <Tooltip tooltipContent="Inbox" position="bottom">
           <AppSidebarItem
             variant="link"
@@ -78,11 +106,21 @@ export const TopNavigationRoot = observer(function TopNavigationRoot() {
           />
         </Tooltip>
         <HelpMenuRoot />
-        <StarUsOnGitHubLink />
+        {/* planeAI: removed <StarUsOnGitHubLink /> */}
         <div className="flex size-8 items-center justify-center rounded-md hover:bg-layer-1-hover">
           <UserMenuRoot />
         </div>
       </div>
+
+      {/* planeAI: AI assistant slide-over */}
+      {currentWorkspaceId && (
+        <AISearchPanel
+          open={aiOpen}
+          onClose={() => setAiOpen(false)}
+          workspaceId={currentWorkspaceId}
+          workspaceSlug={slugStr}
+        />
+      )}
     </div>
   );
 });
