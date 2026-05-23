@@ -63,6 +63,13 @@ from ai.dedupe import (
     ensure_dedupe_label,
     find_candidates as find_dedupe_candidates,
 )
+from ai.describe import (
+    DESCRIBE_SYSTEM,
+    DESCRIBE_TOOLS,
+    already_described,
+    build_describe_prompt,
+    should_describe,
+)
 from ai.search import build_context, retrieve
 from ai.triage import (
     TRIAGE_SYSTEM,
@@ -767,6 +774,49 @@ def _run_dedupe_scenario(*, issue, agent, cfg, write_actions: int) -> tuple[list
     )
 
 
+def _run_describe_scenario(*, issue, agent, cfg, write_actions: int) -> tuple[list, str | None, int]:
+    """Auto-description-draft scenario (TZ 5.5).
+
+    Skipped when the description is already substantial — the
+    :func:`should_describe` gate is checked by the caller, so reaching
+    this function means the description was empty/one-line at the
+    moment of the trigger fire. We assemble nearby project work via
+    RAG, hand the title + context to Claude with ONLY ``add_comment``
+    on the menu, and let the model emit a draft prefixed with
+    :data:`ai.describe.DESCRIBE_MARKER`.
+
+    Crucially the tool subset here EXCLUDES ``update_description`` —
+    the user's existing content (even a one-liner) is left alone, the
+    draft lands as a comment the human reviews. The marker prefix is
+    what makes the draft idempotent on re-trigger
+    (:func:`already_described`).
+    """
+    context_chunks = retrieve(
+        workspace_id=issue.workspace_id,
+        user=agent.user,
+        query=issue.name,
+        cfg=cfg,
+        top_k=8,
+    )
+    # Project-scope the RAG result — the draft must be informed by
+    # THIS project's prior work, not anything the agent's ACL might
+    # otherwise let through (e.g. workspace-level pages).
+    context_chunks = [
+        c for c in context_chunks if c.project_id == str(issue.project_id)
+    ]
+    context = build_context(context_chunks)
+    user_prompt = build_describe_prompt(issue, context=context)
+    return _run_scenario_loop(
+        issue=issue,
+        agent=agent,
+        cfg=cfg,
+        system_prompt=DESCRIBE_SYSTEM,
+        user_prompt=user_prompt,
+        tool_names=DESCRIBE_TOOLS,
+        write_actions_already=write_actions,
+    )
+
+
 def run_agent_body(issue_id) -> dict:
     """Main worker body. Called by ``ai.tasks.run_agent_on_workitem``.
 
@@ -774,6 +824,10 @@ def run_agent_body(issue_id) -> dict:
 
       1. **Triage** (TZ 5.3) — first-time classification.
       2. **Dedupe** (TZ 5.4) — judge-pass over RAG candidates.
+      3. **Describe** (TZ 5.5) — draft a description for issues
+         created with title only. Order matters: dedupe must check
+         its own gate BEFORE describe writes a comment, otherwise
+         dedupe's any-applied-comment heuristic would mis-fire.
 
     Each scenario has its own ``already_*`` idempotency gate so a
     re-trigger (human edit) does not re-run a scenario whose
@@ -815,8 +869,8 @@ def run_agent_body(issue_id) -> dict:
     final_text: str | None = None
     write_actions = 0
 
-    # `agent_acting` spans BOTH scenarios — one trigger fire = one
-    # held flag — so neither scenario's writes accidentally enqueue
+    # `agent_acting` spans ALL scenarios — one trigger fire = one
+    # held flag — so no scenario's writes accidentally enqueue
     # another agent run.
     with agent_acting(issue.id):
         if not already_triaged(issue.id):
@@ -836,9 +890,18 @@ def run_agent_body(issue_id) -> dict:
                 all_actions.extend(logs)
                 final_text = text or final_text
 
+        if should_describe(issue) and not already_described(issue.id):
+            logs, text, write_actions = _run_describe_scenario(
+                issue=issue, agent=agent, cfg=cfg, write_actions=write_actions
+            )
+            scenarios_run.append("describe")
+            all_actions.extend(logs)
+            final_text = text or final_text
+
     if not scenarios_run:
-        # Both scenarios skipped because their idempotency gates
-        # said the work was already done.
+        # Every scenario skipped because its gate (idempotency or
+        # trigger predicate) was closed. Reported as a deliberate
+        # skip rather than a silent drop.
         return {
             "status": "skipped",
             "reason": "all_scenarios_idempotent",

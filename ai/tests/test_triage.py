@@ -188,9 +188,13 @@ def test_run_agent_body_skips_when_all_scenarios_idempotent(
     silent drop.
 
     We seed an applied row for each scenario bucket (triage:
-    ``set_priority``; dedupe: ``add_comment``) so both
-    ``already_triaged`` and ``already_deduped`` return True.
+    ``set_priority``; dedupe: ``add_comment``; describe: a marker-
+    prefixed ``add_comment``) so all three ``already_*`` predicates
+    return True. The describe row needs the marker prefix because
+    its predicate matches on ``input.text`` startswith.
     """
+    from ai.describe import DESCRIBE_MARKER
+
     # Triage bucket — set_priority counts.
     AIAgentActionLog.objects.create(
         agent=triage_setup.agent,
@@ -211,6 +215,17 @@ def test_run_agent_body_skips_when_all_scenarios_idempotent(
         tool_name="add_comment",
         input={"text": "Possible duplicates: PROJ-1"},
         output={"comment_id": "deadbeef", "comment_chars": 30},
+        status=AIAgentActionLog.STATUS_APPLIED,
+    )
+    # Describe bucket — marker-prefixed add_comment closes the gate.
+    AIAgentActionLog.objects.create(
+        agent=triage_setup.agent,
+        workspace_id=triage_setup.workspace.id,
+        project_id=triage_setup.project.id,
+        issue_id=triage_setup.issue.id,
+        tool_name="add_comment",
+        input={"text": f"{DESCRIBE_MARKER}\n\nКонтекст: ..."},
+        output={"comment_id": "feedface", "comment_chars": 50},
         status=AIAgentActionLog.STATUS_APPLIED,
     )
 
