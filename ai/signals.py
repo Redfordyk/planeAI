@@ -170,6 +170,49 @@ def _on_page_deleted(sender, instance, **kwargs):
     delete_chunks.delay(DocumentChunk.SOURCE_PAGE, str(instance.id))
 
 
+# ---- AIProjectSettings ---------------------------------------------------
+#
+# Right-to-erasure for retroactive privacy flagging. TZ 3.4 prevents
+# new chunks from being created for an excluded project, but the
+# admin might flag a project AFTER it's already been indexed — e.g.
+# the team realises a project they thought was public actually
+# contains HR-PRIVATE issues.
+#
+# Without this signal those existing chunks remain in pgvector and
+# keep showing up in search results, defeating the exclusion. The
+# signal closes the loop: the moment ``exclude_from_ai`` flips True,
+# we delete every DocumentChunk row for that project.
+#
+# Direction is one-way: ``False → True`` triggers cleanup. The
+# reverse (``True → False``, "we declassified this project") does
+# NOT auto-reindex — that's an explicit operator action via
+# ``backfill_embeddings --workspace <id>`` because re-sending the
+# content to OpenAI again is a billable decision, not a side effect
+# of a UI toggle.
+
+
+def _on_project_settings_saved(sender, instance, created, **kwargs):
+    if not getattr(instance, "exclude_from_ai", False):
+        # Flag is False — either a new "public" row (no-op) or a
+        # declassification (see comment above; we do not auto-reindex).
+        return
+    # Project just became (or stayed) excluded. Purge any chunks
+    # tied to it. The query is scoped by project_id, so workspace
+    # isolation is preserved automatically.
+    def _purge():
+        n, _ = DocumentChunk.objects.filter(project_id=instance.project_id).delete()
+        logger.info(
+            "exclude_from_ai purge: project=%s removed=%d chunks",
+            instance.project_id,
+            n,
+        )
+
+    # Same on_commit guard as reindex — never delete inside the
+    # transaction that flipped the flag; if the txn rolls back we'd
+    # have orphaned the purge.
+    transaction.on_commit(_purge)
+
+
 # ---- Connect --------------------------------------------------------------
 
 
@@ -206,8 +249,15 @@ def connect() -> None:
     post_save.connect(_on_page_saved, sender=Page, dispatch_uid="ai.page_saved")
     post_delete.connect(_on_page_deleted, sender=Page, dispatch_uid="ai.page_deleted")
 
+    # TZ 6.7 — right-to-erasure on retroactive privacy flag.
+    post_save.connect(
+        _on_project_settings_saved,
+        sender=AIProjectSettings,
+        dispatch_uid="ai.project_settings_saved",
+    )
+
     logger.info(
-        "ai signals connected: Issue, IssueComment, Page (+ agent trigger)"
+        "ai signals connected: Issue, IssueComment, Page, AIProjectSettings (+ agent trigger)"
     )
 
 
