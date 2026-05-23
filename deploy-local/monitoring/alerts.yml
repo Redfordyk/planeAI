@@ -1,0 +1,137 @@
+# TZ 6.2 — Prometheus alert rules for the planeAI layer.
+#
+# Each rule maps 1-to-1 to a DoD bullet. ``for:`` durations are tuned
+# so a single transient blip doesn't page; the rule fires only on
+# sustained conditions. Severity labels feed Alertmanager routing.
+
+groups:
+  - name: planeai
+    interval: 30s
+    rules:
+
+      # ── DoD: бюджет — расход > 80% месячного лимита ─────────────
+      # Sustained ratio above the threshold for 5 minutes filters out
+      # the natural "scrape hits exactly at midnight reset" race.
+      - alert: PlaneAIBudgetWarning
+        expr: planeai_workspace_tokens{metric="ratio"} > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          team: planeai
+          # workspace_id is propagated from the metric labels — the
+          # webhook receiver surfaces it in the chat message.
+        annotations:
+          summary: "Workspace token usage above 80% of monthly budget"
+          description: >-
+            Workspace {{ $labels.workspace_id }} burned
+            {{ printf "%.0f%%" (mul $value 100) }} of its monthly token budget.
+            At 100% the budget-guard hard-blocks AI requests — investigate
+            for runaway agent / accidental bulk reindex.
+
+      # Critical version of the same — fires past 95%.
+      - alert: PlaneAIBudgetCritical
+        expr: planeai_workspace_tokens{metric="ratio"} > 0.95
+        for: 5m
+        labels:
+          severity: critical
+          team: planeai
+        annotations:
+          summary: "Workspace token usage > 95% — imminent hard-block"
+          description: >-
+            Workspace {{ $labels.workspace_id }} is at
+            {{ printf "%.0f%%" (mul $value 100) }} of monthly budget.
+            AI features will 429 for this workspace within hours.
+
+      # ── DoD: бэкафилл застрял — очередь растёт и не уменьшается ─
+      # Two-pronged check: queue depth > 1000 AND the depth has
+      # increased over the last 15 minutes. Sustained for 10 minutes
+      # excludes a healthy bulk-reindex burst.
+      - alert: PlaneAIBackfillStuck
+        expr: |
+          planeai_celery_queue_length > 1000
+          and
+          (planeai_celery_queue_length - planeai_celery_queue_length offset 15m) > 0
+        for: 10m
+        labels:
+          severity: warning
+          team: planeai
+        annotations:
+          summary: "Celery queue growing — backfill worker may be stuck"
+          description: >-
+            Queue {{ $labels.queue }} has {{ $value }} pending tasks and has
+            been growing for at least 15 minutes. Check worker logs:
+            ``docker logs plane-worker``.
+
+      # ── DoD: дрейф индекса — coverage упал ниже порога ──────────
+      # Coverage < 0.85 sustained for 30 minutes means new sources
+      # are landing faster than the indexer drains. Threshold matches
+      # the search UI's "ready" gate (TZ 1.8) plus a 5pp buffer so
+      # we alert before user-facing search degrades.
+      - alert: PlaneAIIndexDrift
+        expr: planeai_index_coverage < 0.85
+        for: 30m
+        labels:
+          severity: warning
+          team: planeai
+        annotations:
+          summary: "Index coverage below 85% for 30 minutes"
+          description: >-
+            Workspace {{ $labels.workspace_id }} source
+            {{ $labels.source_type }} coverage is
+            {{ printf "%.0f%%" (mul $value 100) }}.
+            New issues / comments may not appear in AI search.
+
+      # ── DoD: ошибки провайдера — рост 429/5xx от Anthropic/OpenAI
+      # rate() over 5m * 60 = errors per minute. >5/min sustained is
+      # well above background retry noise (we retry up to 5 times
+      # internally — single transient errors don't escape this).
+      - alert: PlaneAIProviderErrors
+        expr: rate(planeai_provider_errors_total[5m]) * 60 > 5
+        for: 10m
+        labels:
+          severity: warning
+          team: planeai
+        annotations:
+          summary: "{{ $labels.provider }} error rate > 5/min sustained"
+          description: >-
+            {{ $labels.provider }} {{ $labels.kind }} errors are running at
+            {{ printf "%.1f" (mul $value 60) }} per minute. Check provider
+            status page and our quota dashboard.
+
+      # ── DoD: петля агента — аномальный всплеск действий ────────
+      # AGENT_MAX_ACTIONS=5 per worker fire × normal fire rate
+      # (~5/hour per workspace at most) ≪ 30/5min. If we see >30
+      # applied agent actions in a 5-minute window on one workspace
+      # — that's the loop signature: the agent is hammering one or
+      # more issues. The TZ flags this as the highest-cost failure
+      # ("способна за минуты сжечь весь бюджет").
+      - alert: PlaneAIAgentLoop
+        expr: planeai_agent_actions_5m > 30
+        for: 2m
+        labels:
+          severity: critical
+          team: planeai
+        annotations:
+          summary: "Agent activity in {{ $labels.workspace_id }} > 30/5m"
+          description: >-
+            Workspace {{ $labels.workspace_id }} has {{ $value }} applied
+            agent actions in the last 5 minutes — possible self-trigger
+            loop. Consider disabling the agent via the UI toggle while
+            you investigate: TZ 5.6 ``AgentToggle``.
+
+      # ── Health endpoint failed scraping ─────────────────────────
+      # If the metrics endpoint itself goes silent, all the above
+      # alerts would silently stop firing. Catch that with an "up"
+      # alert against the metrics scrape job.
+      - alert: PlaneAIMetricsDown
+        expr: up{job="planeai"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          team: planeai
+        annotations:
+          summary: "planeAI /metrics scrape failing"
+          description: >-
+            Prometheus has been unable to scrape /api/ai/metrics/ for 5
+            minutes — every other planeAI alert is silenced until this
+            recovers. Check API process and PLANEAI_METRICS_TOKEN.

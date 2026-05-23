@@ -11,6 +11,9 @@ from ai.agent_views import (
     AgentListView,
     IssuesTouchedView,
 )
+from ai.alerting import AlertWebhookView
+from ai.health import HealthView
+from ai.metrics import MetricsView
 from ai.views import IndexStatusView, SearchView
 
 
@@ -53,4 +56,8 @@ urlpatterns = [
         IssuesTouchedView.as_view(),
         name="issues-touched",
     ),
+    # --- TZ 6.2: monitoring + alerts -----------------------------
+    path("metrics/", MetricsView.as_view(), name="metrics"),
+    path("health/", HealthView.as_view(), name="health"),
+    path("alerts/webhook/", AlertWebhookView.as_view(), name="alert-webhook"),
 ]

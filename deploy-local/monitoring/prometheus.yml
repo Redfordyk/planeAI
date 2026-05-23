@@ -1,0 +1,43 @@
+# TZ 6.2 — Prometheus scrape configuration for the planeAI stack.
+#
+# Single scrape job pointed at the Django API process. The /metrics
+# endpoint is token-gated; we pass the token as a Bearer header which
+# the Django view accepts (it strips "Bearer " from the
+# Authorization header and compares to PLANEAI_METRICS_TOKEN).
+
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: planeai
+    metrics_path: /api/ai/metrics/
+    scheme: http
+    # Hit the in-stack API by service name. The Plane stack exposes
+    # the API on port 8000 internally.
+    static_configs:
+      - targets:
+          - "api:8000"
+        labels:
+          stack: planeai
+    # The metrics endpoint accepts either ``X-Metrics-Token`` or
+    # ``Authorization: Bearer ...``. We use the bearer form because
+    # it's the standard Prometheus mechanism.
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/metrics.token
+
+  # Self-scrape so Alertmanager rules referring to ``up`` work even
+  # for the Prometheus instance itself (operator catches a dead
+  # monitoring stack without external watchdog).
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

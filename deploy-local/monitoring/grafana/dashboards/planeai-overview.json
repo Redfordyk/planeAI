@@ -1,0 +1,159 @@
+{
+  "title": "planeAI — overview (TZ 6.2)",
+  "uid": "planeai-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "tags": ["planeai"],
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {"refresh_intervals": ["10s", "30s", "1m", "5m"]},
+  "templating": {
+    "list": [
+      {
+        "name": "workspace",
+        "label": "Workspace",
+        "type": "query",
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "query": "label_values(planeai_workspace_tokens, workspace_id)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Token usage ratio (per workspace)",
+      "description": "Daily-month token usage divided by monthly_token_budget. The 80% line is the alert threshold; 100% means the budget guard hard-blocks.",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1.2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.8},
+              {"color": "red", "value": 0.95}
+            ]
+          }
+        }
+      },
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "targets": [
+        {
+          "expr": "planeai_workspace_tokens{metric=\"ratio\", workspace_id=~\"$workspace\"}",
+          "legendFormat": "ws:{{workspace_id}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Index coverage (per workspace × source)",
+      "description": "Fraction of indexable items present in DocumentChunk. The 0.85 line is the alert threshold (TZ 6.2 'дрейф индекса').",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1.05,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": 0.85},
+              {"color": "green", "value": 0.95}
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "planeai_index_coverage{workspace_id=~\"$workspace\"}",
+          "legendFormat": "ws:{{workspace_id}} src:{{source_type}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Celery queue length",
+      "description": "Pending tasks per queue. Sustained growth = backfill stuck (TZ 6.2).",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+      "fieldConfig": {
+        "defaults": {"unit": "short", "min": 0}
+      },
+      "targets": [
+        {
+          "expr": "planeai_celery_queue_length",
+          "legendFormat": "{{queue}}"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Provider errors / min",
+      "description": "Anthropic / OpenAI 429 + transient errors observed by our retry loop. >5/min sustained fires PlaneAIProviderErrors.",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+      "fieldConfig": {"defaults": {"unit": "ops"}},
+      "targets": [
+        {
+          "expr": "rate(planeai_provider_errors_total[5m]) * 60",
+          "legendFormat": "{{provider}} {{kind}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Agent actions (last 5 minutes)",
+      "description": "Applied agent actions per workspace, 5-minute window. >30 fires the loop alert.",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 15},
+              {"color": "red", "value": 30}
+            ]
+          }
+        }
+      },
+      "targets": [
+        {
+          "expr": "planeai_agent_actions_5m{workspace_id=~\"$workspace\"}",
+          "legendFormat": "ws:{{workspace_id}}"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Agent action totals (by tool × status)",
+      "description": "Cumulative agent action attempts since process start. Rejection rate is the readability check — if rejected % climbs it's a sign the model is misbehaving.",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+      "fieldConfig": {"defaults": {"unit": "ops"}},
+      "targets": [
+        {
+          "expr": "rate(planeai_agent_actions_total[5m]) * 60",
+          "legendFormat": "{{tool_name}} / {{status}}"
+        }
+      ]
+    }
+  ]
+}

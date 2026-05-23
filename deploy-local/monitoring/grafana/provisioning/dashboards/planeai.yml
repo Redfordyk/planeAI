@@ -1,0 +1,15 @@
+# Grafana dashboard provisioner — picks up the JSON files in
+# /var/lib/grafana/dashboards on every reload so the planeAI
+# overview dashboard appears without manual import.
+
+apiVersion: 1
+
+providers:
+  - name: planeai
+    folder: planeAI
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards

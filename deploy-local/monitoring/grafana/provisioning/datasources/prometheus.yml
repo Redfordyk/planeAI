@@ -1,0 +1,13 @@
+# Auto-provisioned Prometheus datasource for the planeAI dashboard.
+# Lives in repo so a fresh Grafana container ships with the AI
+# datasource already wired — no admin clicks required.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

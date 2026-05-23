@@ -1,0 +1,99 @@
+# deploy-local/docker-compose.monitoring.yml — Prometheus + Alertmanager
+# + Grafana overlay for TZ 6.2.
+#
+# Compose on top of the main stack:
+#
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f docker-compose.staging.yml \
+#     -f docker-compose.monitoring.yml \
+#     up -d prometheus alertmanager grafana
+#
+# Required env (in .env on the host):
+#   PLANEAI_METRICS_TOKEN           # token Prometheus uses to scrape /metrics
+#   PLANEAI_ALERT_WEBHOOK_TOKEN     # token Alertmanager passes to /api/ai/alerts/webhook/
+#   PLANEAI_ALERTMANAGER_TARGET_URL # = http://api:8000/api/ai/alerts/webhook/
+#   ALERT_WEBHOOK_URL               # team chat URL (Slack/Telegram/Discord)
+#   ALERT_WEBHOOK_FORMAT            # slack | telegram | discord | raw
+#   ALERT_WEBHOOK_TOKEN             # shared secret, equals PLANEAI_ALERT_WEBHOOK_TOKEN
+#   GF_SECURITY_ADMIN_PASSWORD      # Grafana admin password
+#
+# All three services restart unless-stopped — the AI alerting story
+# is only useful if it lives across host reboots.
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: planeai-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      # 90 days retention — matches BACKUP.md offsite retention.
+      # Adjust if disk pressure becomes an issue.
+      - "--storage.tsdb.retention.time=90d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ../deploy-local/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../deploy-local/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - default
+    # Metrics token is written into the container at startup from the
+    # host env — Prometheus reads it from credentials_file. Doing it
+    # via a small init script avoids baking the secret into the image
+    # or the compose file.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        echo "${PLANEAI_METRICS_TOKEN}" > /etc/prometheus/metrics.token
+        chmod 0400 /etc/prometheus/metrics.token
+        exec /bin/prometheus \
+          --config.file=/etc/prometheus/prometheus.yml \
+          --storage.tsdb.path=/prometheus \
+          --storage.tsdb.retention.time=90d \
+          --web.enable-lifecycle
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: planeai-alertmanager
+    restart: unless-stopped
+    environment:
+      PLANEAI_ALERTMANAGER_TARGET_URL: ${PLANEAI_ALERTMANAGER_TARGET_URL:-http://api:8000/api/ai/alerts/webhook/}
+      PLANEAI_ALERT_WEBHOOK_TOKEN: ${PLANEAI_ALERT_WEBHOOK_TOKEN}
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    volumes:
+      - ../deploy-local/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    networks:
+      - default
+
+  grafana:
+    image: grafana/grafana-oss:11.3.0
+    container_name: planeai-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:-changeme}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # Datasource provisioning via files mounted below — avoids
+      # clicks in the UI on every fresh deploy.
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+    volumes:
+      - ../deploy-local/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../deploy-local/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - default
+
+volumes:
+  prometheus-data:
+  alertmanager-data:
+  grafana-data:

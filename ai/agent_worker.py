@@ -247,8 +247,14 @@ def log_agent_action(
     rejection happens and we want to see what the model intended.
     ``output`` describes what we did (e.g. ``{"labels_set": 2}``);
     on rejection it's empty.
+
+    Also bumps the TZ 6.2 ``planeai_agent_actions_total`` Prometheus
+    counter (labelled by workspace / tool / status). Lazy-import so a
+    test that monkeypatches ``ai.metrics`` doesn't have to install
+    the metrics module — and so providers/agent_worker keep working
+    if metrics module fails to load.
     """
-    return AIAgentActionLog.objects.create(
+    row = AIAgentActionLog.objects.create(
         agent=agent,
         workspace_id=issue.workspace_id,
         project_id=issue.project_id,
@@ -259,6 +265,21 @@ def log_agent_action(
         status=status,
         error=error,
     )
+    try:
+        from ai.metrics import AGENT_ACTIONS
+
+        AGENT_ACTIONS.inc(
+            {
+                "workspace_id": str(issue.workspace_id),
+                "tool_name": tool_name,
+                "status": status,
+            }
+        )
+    except Exception:  # noqa: BLE001
+        # Best-effort: the audit row is the source of truth, the
+        # counter is just a fast scrape-time aggregate. Swallow.
+        pass
+    return row
 
 
 # ---------------------------------------------------------------------------

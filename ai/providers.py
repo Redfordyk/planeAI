@@ -57,6 +57,26 @@ def _sleep_backoff(attempt: int, *, jitter: bool = True) -> None:
     time.sleep(delay)
 
 
+def _bump_provider_error(provider: str, kind: str) -> None:
+    """Increment the Prometheus ``planeai_provider_errors_total``
+    counter (TZ 6.2). Lazy-imported to avoid a circular import at
+    module-load time (ai.metrics pulls models, which pull settings
+    that pull providers in some test paths).
+
+    Never raises — counter bumps are best-effort and must not break
+    the underlying provider retry loop.
+    """
+    try:
+        from ai.metrics import PROVIDER_ERRORS
+
+        PROVIDER_ERRORS.inc({"provider": provider, "kind": kind})
+    except Exception:
+        # Counter unavailable (early import, settings not ready) —
+        # swallow. The retry loop continues; the lost increment is
+        # acceptable for a "rough rate" alert metric.
+        pass
+
+
 class ClaudeChat:
     """Thin sync wrapper over `anthropic.Anthropic.messages.create`.
 
@@ -101,6 +121,7 @@ class ClaudeChat:
                     MAX_RETRIES,
                     model,
                 )
+                _bump_provider_error("anthropic", "rate_limit")
                 if attempt == MAX_RETRIES - 1:
                     raise
                 _sleep_backoff(attempt, jitter=True)
@@ -112,6 +133,7 @@ class ClaudeChat:
                     MAX_RETRIES,
                     type(e).__name__,
                 )
+                _bump_provider_error("anthropic", "api_error")
                 if attempt == MAX_RETRIES - 1:
                     raise
                 _sleep_backoff(attempt, jitter=False)
@@ -150,6 +172,7 @@ class OpenAIEmbed:
                         MAX_RETRIES,
                         len(batch),
                     )
+                    _bump_provider_error("openai", "rate_limit")
                     if attempt == MAX_RETRIES - 1:
                         raise
                     _sleep_backoff(attempt, jitter=True)
@@ -161,6 +184,7 @@ class OpenAIEmbed:
                         MAX_RETRIES,
                         type(e).__name__,
                     )
+                    _bump_provider_error("openai", "api_error")
                     if attempt == MAX_RETRIES - 1:
                         raise
                     _sleep_backoff(attempt, jitter=False)
