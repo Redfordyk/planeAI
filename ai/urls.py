@@ -14,6 +14,7 @@ from ai.agent_views import (
 from ai.alerting import AlertWebhookView
 from ai.health import HealthView
 from ai.metrics import MetricsView
+from ai.usage_views import UsageStatsView
 from ai.views import IndexStatusView, SearchView
 
 
@@ -60,4 +61,10 @@ urlpatterns = [
     path("metrics/", MetricsView.as_view(), name="metrics"),
     path("health/", HealthView.as_view(), name="health"),
     path("alerts/webhook/", AlertWebhookView.as_view(), name="alert-webhook"),
+    # --- TZ 6.3: usage dashboard ---------------------------------
+    path(
+        "workspaces/<uuid:workspace_id>/usage/stats/",
+        UsageStatsView.as_view(),
+        name="usage-stats",
+    ),
 ]
