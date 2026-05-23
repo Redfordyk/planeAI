@@ -173,18 +173,26 @@ def reindex_source(self, workspace_id, project_id, source_type, source_id):
     acks_late=False,
 )
 def run_agent_on_workitem(self, issue_id):
-    """TZ 5.1 — minimal entry point that the assignment/label trigger
-    enqueues. Full agent-loop body (RAG retrieval, allowed-tools agent
-    run, white-listed writes, audit log) is the deliverable of TZ 5.2;
-    this stub exists so the trigger has something to apply_async to
-    and tests can assert "exactly one task was scheduled" without
-    importing the worker module.
+    """Celery entry point for the agent loop (TZ 5.1 trigger → 5.2 body).
 
-    The stub does no Plane writes, so the self-loop guard isn't
-    exercised here — the guard is wired in :func:`ai.agent_triggers.
-    agent_acting`, ready for TZ 5.2 to use.
+    The wrapper is intentionally thin: all logic — RAG retrieval,
+    white-listed tool dispatch, scope enforcement, audit logging —
+    lives in :mod:`ai.agent_worker`. Keeping the Celery decorator
+    here (and the worker import deferred) avoids dragging the agent
+    module's import surface into ``ai.signals`` at app-ready time.
+
+    Retries: any handler exception inside ``run_agent_body`` is
+    already swallowed into an ``AIAgentActionLog`` row with
+    ``status='error'``, so a normal run never raises. We still leave
+    ``max_retries=2`` for genuine infrastructure failures (DB blip,
+    Anthropic outage) that bubble up before we reach the per-action
+    handler.
     """
-    logger.info("run_agent_on_workitem: scheduled (stub) issue=%s", issue_id)
+    from ai.agent_worker import run_agent_body
+
+    result = run_agent_body(issue_id)
+    logger.info("run_agent_on_workitem: issue=%s result=%s", issue_id, result)
+    return result
 
 
 @shared_task(name="ai.delete_chunks")

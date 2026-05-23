@@ -266,6 +266,86 @@ class AIAgent(models.Model):
         return f"AIAgent(user={self.user_id}, ws={self.workspace_id})"
 
 
+class AIAgentActionLog(models.Model):
+    """Append-only audit trail for every agent action attempt.
+
+    TZ 5.2 DoD requires "каждое действие пишется в аудит-лог" — the
+    table answers two questions during an incident:
+
+      - what did the agent try to do? (``tool_name`` + ``input``)
+      - was it allowed through? (``status``, ``error``)
+
+    We log BOTH applied and rejected actions. A rejection (e.g.
+    cross-project target) is the more interesting case — it tells us
+    the model attempted something the white-list / scope guard
+    caught, which is exactly the kind of event the safety review
+    needs to see.
+
+    The row is intentionally narrow: structured JSON in ``input`` so
+    we don't need a column per tool. ``output`` carries whatever the
+    handler returned (e.g. "added 2 labels"). Never store API keys
+    or user-supplied free text from the issue body here — that
+    duplicates Plane's storage and creates a GDPR exposure.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    agent = models.ForeignKey(
+        "ai.AIAgent",
+        on_delete=models.CASCADE,
+        related_name="action_logs",
+    )
+    workspace = models.ForeignKey(
+        "db.Workspace",
+        on_delete=models.CASCADE,
+        related_name="ai_agent_action_logs",
+    )
+    # `project` is the scope the action was bound to. NOT nullable —
+    # agent actions are project-scoped by design (TZ 5.2 invariant 2).
+    project = models.ForeignKey(
+        "db.Project",
+        on_delete=models.CASCADE,
+        related_name="ai_agent_action_logs",
+    )
+    issue_id = models.UUIDField()
+    tool_name = models.CharField(max_length=40)
+    input = models.JSONField(default=dict)
+    output = models.JSONField(default=dict, blank=True)
+
+    STATUS_APPLIED = "applied"
+    STATUS_REJECTED = "rejected"  # white-list / scope guard refused
+    STATUS_ERROR = "error"  # handler raised
+    STATUS_CHOICES = (
+        (STATUS_APPLIED, "applied"),
+        (STATUS_REJECTED, "rejected"),
+        (STATUS_ERROR, "error"),
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    error = models.TextField(blank=True, default="")
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "ai_agent_action_log"
+        verbose_name = "AI agent action"
+        verbose_name_plural = "AI agent actions"
+        indexes = [
+            # Per-issue audit lookup ("what did the agent do on this
+            # issue?").
+            models.Index(
+                fields=["issue_id", "created_at"],
+                name="ai_agent_log_issue_idx",
+            ),
+            # Per-workspace incident review.
+            models.Index(
+                fields=["workspace", "created_at"],
+                name="ai_agent_log_ws_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.tool_name}/{self.status}@{self.issue_id}"
+
+
 class AIProjectSettings(models.Model):
     """Per-project AI opt-out flag.
 
