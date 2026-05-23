@@ -210,7 +210,11 @@ class AgentActionListView(APIView):
         since = request.query_params.get("since")
         if since:
             try:
-                parsed = datetime.fromisoformat(since.replace("Z", "+00:00"))
+                # URL decoding turns a literal '+' (the timezone sign
+                # in '2026-05-23T15:52:02+00:00') into a space. Put
+                # it back so fromisoformat accepts the value.
+                normalised = since.replace(" ", "+").replace("Z", "+00:00")
+                parsed = datetime.fromisoformat(normalised)
                 if parsed.tzinfo is None:
                     parsed = parsed.replace(tzinfo=timezone.utc)
                 qs = qs.filter(created_at__gte=parsed)

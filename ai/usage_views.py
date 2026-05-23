@@ -85,9 +85,13 @@ class UsageStatsView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        start, end = self._resolve_period(request)
-        if isinstance(start, Response):  # bubbled validation error
-            return start
+        # _resolve_period returns either (start, end) tuple or a
+        # Response for 400-class errors. Branch on type FIRST —
+        # unpacking the Response triggers ContentNotRenderedError.
+        period = self._resolve_period(request)
+        if isinstance(period, Response):
+            return period
+        start, end = period
 
         try:
             top_users = int(request.query_params.get("top_users") or 10)

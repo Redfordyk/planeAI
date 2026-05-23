@@ -351,8 +351,12 @@ class Command(BaseCommand):
             if not chunk_source_ids:
                 return
             # Source rows that are soft-deleted but still have chunks.
+            # Plane's default `.objects` manager hides deleted rows
+            # via SoftDeletionManager (apps/api/plane/db/mixins.py),
+            # so we have to go through `all_objects` to even see them.
+            manager = getattr(Model, "all_objects", Model.objects)
             deleted_in_db = set(
-                Model.objects.filter(
+                manager.filter(
                     id__in=list(chunk_source_ids),
                     deleted_at__isnull=False,
                 ).values_list("id", flat=True)

@@ -98,10 +98,20 @@ def make_issue(db):
     from plane.db.models import Issue
 
     def _make(*, workspace, project, name="issue", description="", created_by=None):
+        # Plane's Issue.save() recomputes `description_stripped` from
+        # `description_html` on every save (both create and update —
+        # see apps/api/plane/db/models/issue.py). So we wrap our test
+        # text in a minimal `<p>...</p>` tag and let strip_tags()
+        # produce the stripped form. Passing description_stripped
+        # alone gets silently overwritten with strip_tags("<p></p>") = "".
+        description_html = (
+            f"<p>{description}</p>" if description else "<p></p>"
+        )
         return Issue.objects.create(
             workspace=workspace,
             project=project,
             name=name,
+            description_html=description_html,
             description_stripped=description,
             created_by=created_by or workspace.owner,
         )
