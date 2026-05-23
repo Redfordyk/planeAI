@@ -35,6 +35,13 @@ def main() -> int:
         )
         return 2
 
+    # Force UTF-8 on stdout so Russian / emoji output never crashes
+    # the runner on Windows (default cp1251).
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     client.connect(
