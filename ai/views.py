@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from asgiref.sync import sync_to_async
 from django.apps import apps
 from django.db.models import Count
 from django.http import StreamingHttpResponse

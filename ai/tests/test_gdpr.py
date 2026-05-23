@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import io
 import json
-import os
 
 import pytest
 from django.core.management import call_command
@@ -220,8 +219,9 @@ def test_gdpr_check_private_clean_fails_when_chunks_leaked(
     isolated_env.setenv("PLANEAI_DPA_CLOSED", "2026-07-08")
     ws = make_workspace()
     project = make_project(workspace=ws, created_by=ws.owner)
-    # Create chunks BEFORE flagging (no signal yet on this row).
-    chunk = make_chunk(workspace=ws, project=project, chunk_index=0)
+    # Create chunks BEFORE flagging — the check finds them via the
+    # project, no need to keep the returned model handle around.
+    make_chunk(workspace=ws, project=project, chunk_index=0)
     # Mark exclude_from_ai but bypass the signal by raw update —
     # mimicking the failure mode the check is designed to catch.
     AIProjectSettings.objects.create(

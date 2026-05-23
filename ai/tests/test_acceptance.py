@@ -19,9 +19,7 @@ from __future__ import annotations
 import io
 import json
 import os
-import time
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
 from django.core.management import call_command

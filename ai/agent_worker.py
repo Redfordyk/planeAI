@@ -44,7 +44,6 @@ import logging
 from typing import Any
 
 from django.apps import apps as django_apps
-from django.db import transaction
 
 from ai import providers
 from ai.agent_triggers import agent_acting
@@ -55,7 +54,6 @@ from ai.models import (
     WorkspaceAIConfig,
 )
 from ai.dedupe import (
-    DEDUPE_LABEL_NAME,
     DEDUPE_SYSTEM,
     DEDUPE_TOOLS,
     already_deduped,
@@ -370,7 +368,6 @@ def _apply_set_labels(*, issue, params: dict) -> dict:
         raise _AgentRejection(
             f"no requested labels exist in project: {bad!r}"
         )
-    Label = django_apps.get_model("db", "Label")
     # Snapshot BEFORE issue.labels.set() — the queryset is materialised
     # here, not lazy. Names alongside ids so the UI can render a
     # preview without joining back to db.Label.
@@ -378,8 +375,9 @@ def _apply_set_labels(*, issue, params: dict) -> dict:
         issue.labels.values("id", "name").order_by("name")
     )
     ids = [lid for lid in resolved.values() if lid is not None]
-    label_qs = Label.objects.filter(id__in=ids)
-    # Replace IssueLabel rows directly. Plane's through-model
+    # `Label` is imported above for the validation pass; the bulk_create
+    # below references label_id directly, so we no longer build a
+    # `label_qs` here. Replace IssueLabel rows directly. Plane's through-model
     # SoftDeletionManager interacts oddly with Django's M2M `.set()` —
     # it can leave stale rows even with clear=True, because the
     # manager filters out the rows the remove step is trying to act

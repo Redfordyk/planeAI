@@ -28,12 +28,10 @@ from __future__ import annotations
 import importlib
 import io
 import pkgutil
-import uuid
 
 import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.test import override_settings
 from rest_framework.test import APIClient
 
 from ai.models import WorkspaceAIConfig

@@ -25,7 +25,7 @@ import pytest
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from ai.models import AIUsageLog, WorkspaceAIConfig
+from ai.models import AIUsageLog
 from ai.usage import ALL_FEATURES, compute_usage_stats, month_window
 
 

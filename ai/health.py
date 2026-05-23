@@ -117,7 +117,7 @@ def _check_broker() -> dict:
             with current_app.connection_or_acquire(connect_timeout=2) as conn:
                 conn.ensure_connection(max_retries=0)
             return {"status": CHECK_OK, "detail": "rabbitmq connect ok"}
-        return {"status": CHECK_DEGRADED, "detail": f"unsupported broker scheme"}
+        return {"status": CHECK_DEGRADED, "detail": "unsupported broker scheme"}
     except Exception as exc:  # noqa: BLE001
         return {"status": CHECK_DEGRADED, "detail": f"{type(exc).__name__}: {exc}"}
 
