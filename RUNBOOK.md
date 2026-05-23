@@ -431,7 +431,7 @@ DoD ТЗ 6.1 — restore-тест прошёл хотя бы раз. На про
 | **1 — Ингест + индекс** | (модели, миграции, ингест-хуки, бэкафилл, бюджет, index-status — в коде) | 1.1–1.9 |
 | **2 — Поиск + RAG** | [STREAMING.md](STREAMING.md), [SPRINT-2-ACCEPTANCE.md](SPRINT-2-ACCEPTANCE.md) | 2.1–2.9 |
 | **5 — Агенты** | [SPRINT-5-ACCEPTANCE.md](SPRINT-5-ACCEPTANCE.md) | 5.1–5.8 |
-| **6 — Прод и выпуск** | [BACKUP.md](BACKUP.md), [MONITORING.md](MONITORING.md), [BUDGET.md](BUDGET.md), **этот RUNBOOK.md**, [ROLLBACK.md](ROLLBACK.md), [SPRINT-6-ACCEPTANCE.md](SPRINT-6-ACCEPTANCE.md), [GDPR-RELEASE.md](GDPR-RELEASE.md) | 6.1–6.8 |
+| **6 — Прод и выпуск** | [BACKUP.md](BACKUP.md), [MONITORING.md](MONITORING.md), [BUDGET.md](BUDGET.md), **этот RUNBOOK.md**, [ROLLBACK.md](ROLLBACK.md), [SPRINT-6-ACCEPTANCE.md](SPRINT-6-ACCEPTANCE.md), [GDPR-RELEASE.md](GDPR-RELEASE.md), [RELEASE.md](RELEASE.md), [PHASE-2-BACKLOG.md](PHASE-2-BACKLOG.md), [RETROSPECTIVE.md](RETROSPECTIVE.md), [PROJECT-COMPLETION.md](PROJECT-COMPLETION.md) | 6.1–6.8 |
 
 ### По вопросу
 
@@ -459,6 +459,11 @@ DoD ТЗ 6.1 — restore-тест прошёл хотя бы раз. На про
 | GDPR-чеклист релиза | [GDPR-RELEASE.md](GDPR-RELEASE.md) |
 | Реестр обработки персональных данных | [docs/processing-register.md](docs/processing-register.md) |
 | Шаблон уведомления команде об ИИ | [docs/team-notice-ai-processing.md](docs/team-notice-ai-processing.md) |
+| Постепенный rollout релиза | [RELEASE.md](RELEASE.md) |
+| Гайд по использованию для команды | [docs/user-guide.md](docs/user-guide.md) |
+| Бэклог фазы 2 (что докрутить дальше) | [PHASE-2-BACKLOG.md](PHASE-2-BACKLOG.md) |
+| Ретроспектива команды | [RETROSPECTIVE.md](RETROSPECTIVE.md) |
+| Финальная sign-off проекта | [PROJECT-COMPLETION.md](PROJECT-COMPLETION.md) |
 | Контекст и правила для Claude Code | [CLAUDE.md](CLAUDE.md) |
 
 ### Полезные пути в коде
