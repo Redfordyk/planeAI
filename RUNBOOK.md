@@ -389,11 +389,12 @@ DoD ТЗ 6.1 — restore-тест прошёл хотя бы раз. На про
 
 ### Когда нужно откатиться
 
-Документ TZ 6.5 — [tz/sprint-6/05-задача-6.5-план-отката.md](tz/sprint-6/05-задача-6.5-план-отката.md). Базовый сценарий:
+Полный playbook с деревом решений — [ROLLBACK.md](ROLLBACK.md) (TZ 6.5). Четыре уровня от самого дешёвого/безопасного к самому дорогому/деструктивному:
 
-1. **Откат фичи** — поменять флаг в `WorkspaceAIConfig` (отключить `enabled` целиком или для одного воркспейса).
-2. **Откат образа** — `docker compose pull plane-backend-ai:<предыдущий-sha>` + `up -d`. Тег предыдущего успешного билда — в [`CICD.md`](CICD.md) (артефакт `planeai-deploy-staging`).
-3. **Откат миграции** — `manage.py migrate ai <предыдущий_номер>`. ВНИМАНИЕ: убедиться, что назад совместимо (мы редко отказываемся от полей). Если миграция дропает таблицу — restore из бэкапа быстрее.
+1. **L1 — Kill switch (секунды, 0 потерь).** `manage.py disable_ai --workspace <id>`. ИИ-эндпоинты 403, Plane работает. **Всегда начинать здесь, если симптом — в ИИ-фичах.**
+2. **L2 — Откат образа (минуты).** Вернуть `PLANE_AI_IMAGE` на предыдущий SHA из `PLANE_AI_IMAGE_PREVIOUS`, `docker compose up -d`. См. [CICD.md](CICD.md).
+3. **L3 — Откат миграций ai (деструктивно).** `manage.py migrate ai <предыдущий-номер>`. Все наши миграции стандартные → reverse безопасен по схеме, но **уносит данные** новых полей/таблиц. Перед reverse — `pg_dump` затронутых таблиц.
+4. **L4 — Restore из бэкапа (потеря 24 ч).** Последняя черта. См. [BACKUP.md](BACKUP.md).
 
 ### Регулярные операции
 
@@ -418,7 +419,7 @@ DoD ТЗ 6.1 — restore-тест прошёл хотя бы раз. На про
 | **1 — Ингест + индекс** | (модели, миграции, ингест-хуки, бэкафилл, бюджет, index-status — в коде) | 1.1–1.9 |
 | **2 — Поиск + RAG** | [STREAMING.md](STREAMING.md), [SPRINT-2-ACCEPTANCE.md](SPRINT-2-ACCEPTANCE.md) | 2.1–2.9 |
 | **5 — Агенты** | [SPRINT-5-ACCEPTANCE.md](SPRINT-5-ACCEPTANCE.md) | 5.1–5.8 |
-| **6 — Прод и выпуск** | [BACKUP.md](BACKUP.md), [MONITORING.md](MONITORING.md), [BUDGET.md](BUDGET.md), **этот RUNBOOK.md** | 6.1–6.8 |
+| **6 — Прод и выпуск** | [BACKUP.md](BACKUP.md), [MONITORING.md](MONITORING.md), [BUDGET.md](BUDGET.md), **этот RUNBOOK.md**, [ROLLBACK.md](ROLLBACK.md) | 6.1–6.8 |
 
 ### По вопросу
 
@@ -439,6 +440,7 @@ DoD ТЗ 6.1 — restore-тест прошёл хотя бы раз. На про
 | Что мониторим? Что за алерты? | [MONITORING.md](MONITORING.md) |
 | Кто сколько потратил на ИИ? | [BUDGET.md](BUDGET.md) |
 | Что делать, когда что-то сломалось? | **этот RUNBOOK.md** |
+| Как откатиться, если релиз сломал прод? | [ROLLBACK.md](ROLLBACK.md) |
 | Принимочные сценарии поиска | [SPRINT-2-ACCEPTANCE.md](SPRINT-2-ACCEPTANCE.md) |
 | Принимочные сценарии агента | [SPRINT-5-ACCEPTANCE.md](SPRINT-5-ACCEPTANCE.md) |
 | Контекст и правила для Claude Code | [CLAUDE.md](CLAUDE.md) |
