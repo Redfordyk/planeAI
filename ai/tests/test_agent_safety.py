@@ -205,7 +205,13 @@ def safety_setup(
             "for tests that focus on triage or dedupe."
         ),
     )
-    issue.assignees.add(agent_user)
+    # M2M through `db.IssueAssignee` extends `ProjectBaseModel` which
+    # requires workspace_id + project_id NOT NULL — `.add()` alone
+    # would leave those null and crash on insert.
+    issue.assignees.add(
+        agent_user,
+        through_defaults={"workspace_id": ws.id, "project_id": project.id},
+    )
 
     class _S:
         pass
@@ -708,7 +714,13 @@ def test_describe_does_not_overwrite(
         name="Empty-description trigger",
         description="",
     )
-    fresh.assignees.add(safety_setup.agent_user)
+    fresh.assignees.add(
+        safety_setup.agent_user,
+        through_defaults={
+            "workspace_id": safety_setup.workspace.id,
+            "project_id": safety_setup.project.id,
+        },
+    )
 
     # Close triage / dedupe for THIS issue.
     AIAgentActionLog.objects.create(

@@ -61,7 +61,10 @@ def test_assignment_to_agent_enqueues_one_task(
 
     with transaction.atomic():
         issue = make_issue(workspace=ws, project=prj, name="needs triage")
-        issue.assignees.add(agent.user)
+        issue.assignees.add(
+            agent.user,
+            through_defaults={"workspace_id": ws.id, "project_id": prj.id},
+        )
         # Touch the issue so post_save sees the M2M change at commit time.
         issue.save(update_fields=["name"])
 
@@ -86,7 +89,10 @@ def test_ai_agent_label_enqueues_one_task(
 
     with transaction.atomic():
         issue = make_issue(workspace=ws, project=prj, name="auto handle")
-        issue.labels.add(label)
+        issue.labels.add(
+            label,
+            through_defaults={"workspace_id": ws.id, "project_id": prj.id},
+        )
         issue.save(update_fields=["name"])
 
     assert len(calls) == 1
@@ -105,7 +111,10 @@ def test_loop_guard_suppresses_self_trigger(
     _clear_debounce()
 
     issue = make_issue(workspace=ws, project=prj, name="loop test")
-    issue.assignees.add(agent.user)
+    issue.assignees.add(
+        agent.user,
+        through_defaults={"workspace_id": ws.id, "project_id": prj.id},
+    )
 
     # Simulate the worker acting on the issue: any saves performed
     # inside this block must NOT re-enqueue the agent task.
@@ -132,7 +141,10 @@ def test_workspace_ai_disabled_blocks_trigger(
 
     with transaction.atomic():
         issue = make_issue(workspace=ws, project=prj, name="no ai here")
-        issue.assignees.add(agent.user)
+        issue.assignees.add(
+            agent.user,
+            through_defaults={"workspace_id": ws.id, "project_id": prj.id},
+        )
         issue.save(update_fields=["name"])
 
     assert calls == []
@@ -152,7 +164,10 @@ def test_burst_of_saves_collapses_to_one_task(
 
     with transaction.atomic():
         issue = make_issue(workspace=ws, project=prj, name="burst")
-        issue.assignees.add(agent.user)
+        issue.assignees.add(
+            agent.user,
+            through_defaults={"workspace_id": ws.id, "project_id": prj.id},
+        )
         for i in range(5):
             issue.name = f"burst-{i}"
             issue.save(update_fields=["name"])
