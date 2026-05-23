@@ -117,7 +117,19 @@ class SearchView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    async def post(self, request, workspace_id):
+    def post(self, request, workspace_id):
+        """Sync DRF view — even though the response body streams.
+
+        Earlier this method was ``async def`` to take advantage of
+        ASGI streaming under uvicorn, but DRF's APIView.dispatch in
+        the version pinned by Plane does not await async handlers
+        and returns the unhandled coroutine — the WSGI test client
+        then fails with ``AssertionError: Expected a Response``. Going
+        sync here keeps both the live ASGI stack AND the sync test
+        client happy; the SSE generator itself uses an
+        ``async_to_sync`` adapter at the bottom of the iterator so
+        the OpenAI/Anthropic async clients still work.
+        """
         query = (request.data.get("query") or "").strip()
         if not query:
             return Response(
@@ -127,30 +139,18 @@ class SearchView(APIView):
         top_k = int(request.data.get("top_k") or 20)
         user = request.user
 
-        # Pre-flight: workspace member, AI enabled, budget OK. All
-        # inline-async-safe via sync_to_async wrappers — keeps the
-        # 403/429 path returning a regular DRF Response BEFORE we
-        # start the SSE stream (clients distinguish HTTP errors from
-        # SSE error frames).
-        cfg = await sync_to_async(_load_cfg, thread_sensitive=False)(workspace_id)
+        cfg = _load_cfg(workspace_id)
         if cfg is None:
             return Response(
                 {"error": "AI disabled for this workspace"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-
-        is_member = await sync_to_async(_is_workspace_member, thread_sensitive=False)(
-            user, workspace_id
-        )
-        if not is_member:
+        if not _is_workspace_member(user, workspace_id):
             return Response(
                 {"error": "not a workspace member"},
                 status=status.HTTP_403_FORBIDDEN,
             )
-
-        used = await sync_to_async(tokens_used_this_month, thread_sensitive=False)(
-            workspace_id
-        )
+        used = tokens_used_this_month(workspace_id)
         if used >= cfg.monthly_token_budget:
             return Response(
                 {
@@ -161,30 +161,34 @@ class SearchView(APIView):
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
             )
 
-        # Retrieval (sync ORM + sync OpenAI embed call) — must
-        # finish before we start streaming so the `sources` frame
-        # can be emitted first.
-        chunks = await sync_to_async(retrieve, thread_sensitive=False)(
-            workspace_id=workspace_id,
-            user=user,
-            query=query,
-            cfg=cfg,
-            top_k=top_k,
+        chunks = retrieve(
+            workspace_id=workspace_id, user=user, query=query, cfg=cfg, top_k=top_k,
         )
         sources = source_ids(chunks)
         context = build_context(chunks)
         messages = build_search_messages(context, query)
 
-        gen = claude_sse(
-            cfg=cfg,
-            system=SEARCH_SYSTEM,
-            messages=messages,
-            sources=sources,
-            workspace_id=workspace_id,
-            user_id=user.id,
+        async_gen = claude_sse(
+            cfg=cfg, system=SEARCH_SYSTEM, messages=messages, sources=sources,
+            workspace_id=workspace_id, user_id=user.id,
         )
+
+        # Convert async generator -> sync iterator. Each `next()` call
+        # blocks until the next SSE frame is ready; under uvicorn this
+        # is run in a threadpool so the event loop keeps spinning.
+        def sync_iter():
+            from asgiref.sync import async_to_sync
+
+            ait = async_gen.__aiter__()
+            anext_call = async_to_sync(ait.__anext__)
+            while True:
+                try:
+                    yield anext_call()
+                except StopAsyncIteration:
+                    return
+
         response = StreamingHttpResponse(
-            gen, content_type="text/event-stream"
+            sync_iter(), content_type="text/event-stream"
         )
         for header, value in sse_response_headers().items():
             response[header] = value

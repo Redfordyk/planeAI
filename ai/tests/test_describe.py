@@ -121,8 +121,12 @@ def test_should_describe_true_on_empty_description(describe_setup):
 def test_should_describe_true_on_whitespace_only(describe_setup):
     """A description that's just spaces / newlines is empty for our
     purposes — :func:`should_describe` strips before measuring."""
-    describe_setup.issue.description_stripped = "   \n\t  "
-    describe_setup.issue.save(update_fields=["description_stripped"])
+    # Plane recomputes description_stripped from description_html on
+    # any save of an existing Issue (see Issue.save in
+    # apps/api/plane/db/models/issue.py). So we set the HTML; Plane
+    # strips it back into stripped on save.
+    describe_setup.issue.description_html = "   \n\t  "
+    describe_setup.issue.save(update_fields=["description_html"])
     assert should_describe(describe_setup.issue) is True
 
 
@@ -130,16 +134,16 @@ def test_should_describe_true_on_whitespace_only(describe_setup):
 def test_should_describe_true_just_below_threshold(describe_setup):
     """A description one char short of the threshold still triggers —
     the inequality is strict (``<``)."""
-    describe_setup.issue.description_stripped = "x" * (DESCRIBE_MIN_DESCRIPTION_CHARS - 1)
-    describe_setup.issue.save(update_fields=["description_stripped"])
+    describe_setup.issue.description_html = "<p>" + ("x" * (DESCRIBE_MIN_DESCRIPTION_CHARS - 1)) + "</p>"
+    describe_setup.issue.save(update_fields=["description_html"])
     assert should_describe(describe_setup.issue) is True
 
 
 @pytest.mark.django_db
 def test_should_describe_false_at_threshold(describe_setup):
     """Exactly threshold-length is "enough" — we don't fire."""
-    describe_setup.issue.description_stripped = "x" * DESCRIBE_MIN_DESCRIPTION_CHARS
-    describe_setup.issue.save(update_fields=["description_stripped"])
+    describe_setup.issue.description_html = "<p>" + ("x" * DESCRIBE_MIN_DESCRIPTION_CHARS) + "</p>"
+    describe_setup.issue.save(update_fields=["description_html"])
     assert should_describe(describe_setup.issue) is False
 
 
@@ -152,8 +156,8 @@ def test_should_describe_false_on_substantial_description(describe_setup):
         "the whole app between light and dark themes. Should persist "
         "across reloads and respect the system preference by default."
     )
-    describe_setup.issue.description_stripped = real
-    describe_setup.issue.save(update_fields=["description_stripped"])
+    describe_setup.issue.description_html = "<p>" + real + "</p>"
+    describe_setup.issue.save(update_fields=["description_html"])
     assert should_describe(describe_setup.issue) is False
 
 
@@ -259,8 +263,8 @@ def test_build_describe_prompt_includes_context_when_present(describe_setup):
 def test_build_describe_prompt_shows_existing_short_description(describe_setup):
     """A title-plus-one-liner case: the existing short text is shown
     to the model so the draft expands on it rather than ignoring it."""
-    describe_setup.issue.description_stripped = "TLDR: toggle theme"
-    describe_setup.issue.save(update_fields=["description_stripped"])
+    describe_setup.issue.description_html = "<p>TLDR: toggle theme</p>"
+    describe_setup.issue.save(update_fields=["description_html"])
     prompt = build_describe_prompt(describe_setup.issue, context="")
     assert "TLDR: toggle theme" in prompt
 

@@ -380,7 +380,13 @@ class AgentActionUndoView(APIView):
             id__in=prev_ids, project_id=action.project_id
         )
         with agent_acting(issue.id):
-            issue.labels.set(label_qs)
+            issue.labels.set(
+                label_qs,
+                through_defaults={
+                    "workspace_id": issue.workspace_id,
+                    "project_id": issue.project_id,
+                },
+            )
 
 
 class _UndoError(Exception):

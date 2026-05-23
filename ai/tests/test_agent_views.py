@@ -281,7 +281,13 @@ def test_undo_set_labels_restores_previous_labels(agent_views_setup):
     """Round-trip: issue has label "frontend"; agent replaces with
     "bug"; caller undoes; "frontend" comes back, "bug" is gone."""
     # Pre-state: issue carries "frontend".
-    agent_views_setup.issue.labels.set([agent_views_setup.label_fe])
+    agent_views_setup.issue.labels.set(
+        [agent_views_setup.label_fe],
+        through_defaults={
+            "workspace_id": agent_views_setup.workspace.id,
+            "project_id": agent_views_setup.project.id,
+        },
+    )
 
     log = apply_agent_action(
         agent=agent_views_setup.agent,
@@ -407,7 +413,13 @@ def test_undo_does_not_retrigger_agent(agent_views_setup, monkeypatch):
         agent_triggers, "_enqueue_agent", lambda issue_id: enqueues.append(issue_id)
     )
 
-    agent_views_setup.issue.labels.set([agent_views_setup.label_fe])
+    agent_views_setup.issue.labels.set(
+        [agent_views_setup.label_fe],
+        through_defaults={
+            "workspace_id": agent_views_setup.workspace.id,
+            "project_id": agent_views_setup.project.id,
+        },
+    )
     log = apply_agent_action(
         agent=agent_views_setup.agent,
         issue=agent_views_setup.issue,

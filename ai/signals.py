@@ -89,7 +89,10 @@ def _soft_deleted(instance) -> bool:
 
 def _on_issue_saved(sender, instance, **kwargs):
     if _soft_deleted(instance):
-        delete_chunks.delay(DocumentChunk.SOURCE_WORK_ITEM, str(instance.id))
+        # Inline (not .delay) — chunk deletion is a small idempotent
+        # SQL DELETE and inline keeps the soft-delete event visible
+        # in test suites that don't run a live Celery worker.
+        delete_chunks(DocumentChunk.SOURCE_WORK_ITEM, str(instance.id))
         return
     # Draft issues never appear in retrieval; skip indexing too.
     if getattr(instance, "is_draft", False):
@@ -120,7 +123,7 @@ def _on_issue_deleted(sender, instance, **kwargs):
 
 def _on_comment_saved(sender, instance, **kwargs):
     if _soft_deleted(instance):
-        delete_chunks.delay(DocumentChunk.SOURCE_COMMENT, str(instance.id))
+        delete_chunks(DocumentChunk.SOURCE_COMMENT, str(instance.id))
         return
     if not _ai_enabled(instance.workspace_id):
         return
@@ -145,10 +148,10 @@ def _on_comment_deleted(sender, instance, **kwargs):
 
 def _on_page_saved(sender, instance, **kwargs):
     if _soft_deleted(instance):
-        delete_chunks.delay(DocumentChunk.SOURCE_PAGE, str(instance.id))
+        delete_chunks(DocumentChunk.SOURCE_PAGE, str(instance.id))
         return
     if getattr(instance, "archived_at", None) is not None:
-        delete_chunks.delay(DocumentChunk.SOURCE_PAGE, str(instance.id))
+        delete_chunks(DocumentChunk.SOURCE_PAGE, str(instance.id))
         return
     if not _ai_enabled(instance.workspace_id):
         return

@@ -65,8 +65,15 @@ def test_backfill_skips_excluded_project(
 
     monkeypatch.setattr(tasks.reindex_source, "apply_async", fake_apply_async)
 
+    # TZ 6.6 added the --i-confirm-dpa-closed flag on real backfills.
+    # The test is exercising the exclude_from_ai filter, not the DPA
+    # gate, so we acknowledge it here.
     call_command(
-        "backfill_embeddings", workspace=str(ws.id), rate=3, stdout=StringIO()
+        "backfill_embeddings",
+        workspace=str(ws.id),
+        rate=3,
+        i_confirm_dpa_closed=True,
+        stdout=StringIO(),
     )
     # Only the included issue made it to the queue.
     work_item_calls = [c for c in calls if c[2] == "work_item"]

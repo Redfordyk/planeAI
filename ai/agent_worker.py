@@ -379,7 +379,17 @@ def _apply_set_labels(*, issue, params: dict) -> dict:
     )
     ids = [lid for lid in resolved.values() if lid is not None]
     label_qs = Label.objects.filter(id__in=ids)
-    issue.labels.set(label_qs)
+    # IssueLabel (through model) extends ProjectBaseModel and requires
+    # workspace_id + project_id NOT NULL — `.set(qs)` without
+    # through_defaults would crash on insert. We know both from the
+    # issue we're operating on.
+    issue.labels.set(
+        label_qs,
+        through_defaults={
+            "workspace_id": issue.workspace_id,
+            "project_id": issue.project_id,
+        },
+    )
     return {
         "labels_set": len(ids),
         "rejected_cross_project": bad,

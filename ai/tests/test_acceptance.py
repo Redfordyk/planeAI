@@ -95,9 +95,12 @@ def test_backfill_dry_run_estimates_cost(
     ws = make_workspace()
     make_ai_config(ws)
     project = make_project(workspace=ws, created_by=ws.owner)
+    # Issue.name is CharField(max_length=255). Pack 200 chars of name
+    # + 7800 of description to keep total at 8000 (the math the test
+    # is anchored to).
     make_issue(
         workspace=ws, project=project,
-        name="x" * 1000, description="y" * 7000,
+        name="x" * 200, description="y" * 7800,
     )
     out = _run("backfill_embeddings", workspace=str(ws.id), dry_run=True)
     # Expected token estimate: 8000 / 4 = 2000
