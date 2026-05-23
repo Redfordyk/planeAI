@@ -328,7 +328,16 @@ def _apply_set_labels(*, issue, params: dict) -> dict:
     exist in this project. Anything from another project is logged
     and skipped (rejection is per-name, not per-call: applying the
     valid subset is the right behaviour when the model mixes one bad
-    name in with three good ones)."""
+    name in with three good ones).
+
+    Before applying the change we snapshot the *previous* label ids /
+    names into the output. That snapshot is what the TZ 5.6 undo
+    endpoint uses to restore the prior state — without it we'd have
+    to guess what to roll back to (impossible: ``labels.set`` is
+    destructive). Names alongside ids so the UI can display a
+    human-readable preview ("вернуть метки: bug, frontend") without a
+    second round-trip.
+    """
     names = params.get("labels") or []
     if not isinstance(names, list):
         raise _AgentRejection("labels must be a list")
@@ -341,12 +350,20 @@ def _apply_set_labels(*, issue, params: dict) -> dict:
             f"no requested labels exist in project: {bad!r}"
         )
     Label = django_apps.get_model("db", "Label")
+    # Snapshot BEFORE issue.labels.set() — the queryset is materialised
+    # here, not lazy. Names alongside ids so the UI can render a
+    # preview without joining back to db.Label.
+    previous = list(
+        issue.labels.values("id", "name").order_by("name")
+    )
     ids = [lid for lid in resolved.values() if lid is not None]
     label_qs = Label.objects.filter(id__in=ids)
     issue.labels.set(label_qs)
     return {
         "labels_set": len(ids),
         "rejected_cross_project": bad,
+        "previous_label_ids": [str(row["id"]) for row in previous],
+        "previous_label_names": [row["name"] for row in previous],
     }
 
 

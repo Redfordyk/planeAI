@@ -322,6 +322,22 @@ class AIAgentActionLog(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES)
     error = models.TextField(blank=True, default="")
 
+    # When the TZ 5.6 undo endpoint rolls back this action, we stamp
+    # the timestamp here rather than deleting / mutating the row.
+    # The audit trail must remain append-only — "deleted" wouldn't
+    # answer "did this action exist?" during a later incident review.
+    # NULL = still in effect; a value = undone at that moment.
+    undone_at = models.DateTimeField(null=True, blank=True)
+    # User who performed the undo. SET_NULL so account deletion does
+    # not orphan the audit row (we keep the timestamp regardless).
+    undone_by = models.ForeignKey(
+        "db.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ai_agent_actions_undone",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
