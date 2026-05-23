@@ -211,11 +211,23 @@ PY
 Ингест-сигналы ([ai/signals.py](ai/signals.py)) ловят только **новые** изменения. Чтобы проиндексировать уже существующие задачи/комментарии/страницы — однократный бэкафилл:
 
 ```bash
-# Бэкафилл всего воркспейса. --rate 3 = 3 task/сек, чтобы не упереться
-# в OpenAI rate-limit. По умолчанию идёт по всем трём source_type-ам.
+# 1. Перед прод-бэкафиллом — гейт TZ 6.6:
+docker compose -p plane-ce exec api python manage.py acceptance_check \
+  --workspace <workspace-id>
+# → ALL GREEN — safe to run backfill_embeddings
+
+# 2. Сначала dry-run с оценкой стоимости (никаких реальных вызовов OpenAI).
+docker compose -p plane-ce exec api python manage.py backfill_embeddings \
+  --workspace <workspace-id> \
+  --dry-run --verbose
+# → Would enqueue ... tasks, Estimated OpenAI cost: $0.0xxx
+# → EXCLUDED  project=<id> rows-skipped=N  (приватные проекты)
+
+# 3. Боевой бэкафилл. Флаг --i-confirm-dpa-closed обязателен на проде.
 docker compose -p plane-ce exec -T worker python manage.py backfill_embeddings \
   --workspace <workspace-id> \
-  --rate 3
+  --rate 3 \
+  --i-confirm-dpa-closed
 
 # Прогресс
 curl -fsS \
@@ -419,7 +431,7 @@ DoD ТЗ 6.1 — restore-тест прошёл хотя бы раз. На про
 | **1 — Ингест + индекс** | (модели, миграции, ингест-хуки, бэкафилл, бюджет, index-status — в коде) | 1.1–1.9 |
 | **2 — Поиск + RAG** | [STREAMING.md](STREAMING.md), [SPRINT-2-ACCEPTANCE.md](SPRINT-2-ACCEPTANCE.md) | 2.1–2.9 |
 | **5 — Агенты** | [SPRINT-5-ACCEPTANCE.md](SPRINT-5-ACCEPTANCE.md) | 5.1–5.8 |
-| **6 — Прод и выпуск** | [BACKUP.md](BACKUP.md), [MONITORING.md](MONITORING.md), [BUDGET.md](BUDGET.md), **этот RUNBOOK.md**, [ROLLBACK.md](ROLLBACK.md) | 6.1–6.8 |
+| **6 — Прод и выпуск** | [BACKUP.md](BACKUP.md), [MONITORING.md](MONITORING.md), [BUDGET.md](BUDGET.md), **этот RUNBOOK.md**, [ROLLBACK.md](ROLLBACK.md), [SPRINT-6-ACCEPTANCE.md](SPRINT-6-ACCEPTANCE.md) | 6.1–6.8 |
 
 ### По вопросу
 
@@ -443,6 +455,7 @@ DoD ТЗ 6.1 — restore-тест прошёл хотя бы раз. На про
 | Как откатиться, если релиз сломал прод? | [ROLLBACK.md](ROLLBACK.md) |
 | Принимочные сценарии поиска | [SPRINT-2-ACCEPTANCE.md](SPRINT-2-ACCEPTANCE.md) |
 | Принимочные сценарии агента | [SPRINT-5-ACCEPTANCE.md](SPRINT-5-ACCEPTANCE.md) |
+| Приёмочный прогон на проде | [SPRINT-6-ACCEPTANCE.md](SPRINT-6-ACCEPTANCE.md) |
 | Контекст и правила для Claude Code | [CLAUDE.md](CLAUDE.md) |
 
 ### Полезные пути в коде
