@@ -23,6 +23,18 @@ import openai
 
 from ai.models import AIUsageLog, WorkspaceAIConfig
 from ai.providers import CHAT_MODEL, CHEAP_MODEL
+
+
+def _resolve_model(cfg, cheap: bool) -> str:
+    """Pick chat model. When the workspace is configured for DeepSeek
+    (chat_model starts with 'deepseek-'), ignore the `cheap` flag —
+    Anthropic Haiku doesn't exist on the DeepSeek endpoint. Bring
+    your own cheap-model name on DeepSeek by setting chat_model to
+    deepseek-v4-flash directly."""
+    base = cfg.chat_model or CHAT_MODEL
+    if base.startswith("deepseek-"):
+        return base
+    return base if not cheap else CHEAP_MODEL
 from ai.usage import record_usage
 
 
@@ -59,7 +71,7 @@ def ask_json(
     here is forgiving (strips ```json fences, falls back to ``{}``).
     """
     client = _make_client(cfg)
-    model = (cfg.chat_model or CHAT_MODEL) if not cheap else CHEAP_MODEL
+    model = _resolve_model(cfg, cheap)
     # DeepSeek supports OpenAI's response_format JSON-only mode —
     # forces well-formed JSON output, eliminates "Here is the JSON:"
     # prefixes that we had to strip. Wrap in try/except for providers
@@ -128,7 +140,7 @@ def ask_text(
     """Send + return plain text (no JSON parsing). Used by COMMUNICATOR
     for the weekly status markdown."""
     client = _make_client(cfg)
-    model = (cfg.chat_model or CHAT_MODEL) if not cheap else CHEAP_MODEL
+    model = _resolve_model(cfg, cheap)
     resp = client.chat.completions.create(
         model=model,
         messages=[

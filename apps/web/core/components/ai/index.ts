@@ -12,3 +12,6 @@ export { AgentToggle } from "./agent-toggle";
 export type { AgentToggleProps } from "./agent-toggle";
 export { AgentPage } from "./agent-page";
 export type { AgentPageProps } from "./agent-page";
+
+// Phase 12.1 — Multi-Agent Orchestrator UI (Goals + Activity + Risks + Kill-switch).
+export { OrchestratorPage } from "./orchestrator-page";

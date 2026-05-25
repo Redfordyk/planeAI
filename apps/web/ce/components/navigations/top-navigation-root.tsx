@@ -83,17 +83,29 @@ export const TopNavigationRoot = observer(function TopNavigationRoot() {
       <div className="flex flex-1 shrink-0 items-center justify-end gap-1">
         {/* planeAI: prominent AI assistant entry (client-only) */}
         {showAIButton && (
-          <Tooltip tooltipContent="ИИ-помощник" position="bottom">
-            <button
-              type="button"
-              onClick={() => setAiOpen(true)}
-              className="flex h-8 items-center gap-1.5 rounded-md bg-custom-primary-100/10 px-2.5 text-xs font-medium text-custom-primary-100 hover:bg-custom-primary-100/20 transition-colors"
-              aria-label="Открыть ИИ-помощника"
-            >
-              <span aria-hidden="true">✨</span>
-              <span>ИИ</span>
-            </button>
-          </Tooltip>
+          <>
+            <Tooltip tooltipContent="ИИ-помощник" position="bottom">
+              <button
+                type="button"
+                onClick={() => setAiOpen(true)}
+                className="flex h-8 items-center gap-1.5 rounded-md bg-custom-primary-100/10 px-2.5 text-xs font-medium text-custom-primary-100 hover:bg-custom-primary-100/20 transition-colors"
+                aria-label="Открыть ИИ-помощника"
+              >
+                <span aria-hidden="true">✨</span>
+                <span>ИИ</span>
+              </button>
+            </Tooltip>
+            <Tooltip tooltipContent="Оркестратор: цели, агенты, риски" position="bottom">
+              <a
+                href={`/${slugStr}/ai-orchestrator/`}
+                className="flex h-8 items-center gap-1.5 rounded-md bg-custom-background-90 px-2.5 text-xs font-medium text-custom-text-200 hover:bg-custom-background-80 transition-colors"
+                aria-label="Открыть ИИ-оркестратора"
+              >
+                <span aria-hidden="true">🤖</span>
+                <span>Оркестратор</span>
+              </a>
+            </Tooltip>
+          </>
         )}
         <Tooltip tooltipContent="Inbox" position="bottom">
           <AppSidebarItem
