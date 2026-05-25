@@ -36,7 +36,7 @@ from ai.models import (
 )
 from ai.views import _is_workspace_member, _user_can_use_ai
 from . import analyst, communicator, monitor, planner
-from .breaker import engage_kill_switch, release_kill_switch
+from .breaker import AgentsHalted, engage_kill_switch, release_kill_switch
 
 
 logger = logging.getLogger("plane.ai.orchestrator.api")
@@ -309,7 +309,15 @@ class TriggerScanView(APIView):
         project_id = request.data.get("project_id")
         if not project_id:
             return Response({"error": "project_id required"}, status=400)
-        scan = monitor.scan_project(workspace_id, project_id)
+        try:
+            scan = monitor.scan_project(workspace_id, project_id)
+        except AgentsHalted as exc:
+            # Kill switch engaged / breaker open — return 423 Locked
+            # so the UI can show a clear "агенты остановлены" message
+            # instead of crashing.
+            return Response(
+                {"error": "agents_halted", "reason": str(exc)}, status=423
+            )
         # Escalate critical risks inline
         from . import escalator
         crit = [
@@ -331,9 +339,17 @@ class TriggerAnalystView(APIView):
         ok, err, cfg, http = _user_can_use_ai(request.user, workspace_id)
         if not ok:
             return Response({"error": err}, status=http)
-        days = int(request.data.get("days", 30))
+        try:
+            days = int(request.data.get("days", 30))
+        except (TypeError, ValueError):
+            return Response({"error": "days must be int"}, status=400)
         project_id = request.data.get("project_id")
-        result = analyst.generate_insight(
-            workspace_id=workspace_id, project_id=project_id, cfg=cfg, days=days
-        )
+        try:
+            result = analyst.generate_insight(
+                workspace_id=workspace_id, project_id=project_id, cfg=cfg, days=days
+            )
+        except AgentsHalted as exc:
+            return Response(
+                {"error": "agents_halted", "reason": str(exc)}, status=423
+            )
         return Response(result)
