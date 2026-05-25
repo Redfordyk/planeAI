@@ -71,4 +71,21 @@ class Command(BaseCommand):
             },
         )
         self.stdout.write(self.style.SUCCESS("✓ weekly tick registered"))
+
+        # 3) Hourly index reconciliation — catches issues whose post_save
+        #    signal didn't enqueue (workspace created before AI enabled,
+        #    signal disconnected during migration, etc.).
+        reconcile = hourly  # reuse the :15 hourly schedule
+        PeriodicTask.objects.update_or_create(
+            name="ai-reconcile-index",
+            defaults={
+                "crontab": reconcile,
+                "task": "ai.reconcile_index",
+                "args": json.dumps([]),
+                "enabled": True,
+                "description": "Backfill missing DocumentChunks for unindexed issues.",
+            },
+        )
+        self.stdout.write(self.style.SUCCESS("✓ hourly index reconcile registered"))
+
         self.stdout.write("Beat will pick up changes within 30s.")

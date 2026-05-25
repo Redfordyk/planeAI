@@ -239,6 +239,49 @@ def planner_decompose_goal(self, goal_id: str) -> dict:
     }
 
 
+@shared_task(name="ai.reconcile_index")
+def reconcile_index() -> dict:
+    """Periodic backfill — catches issues whose post_save signal didn't
+    enqueue (workspace created before AI was enabled, signals temporarily
+    disconnected during migrations, etc.).
+
+    For each AI-enabled workspace: enqueue ``reindex_source`` for every
+    issue/comment/page that doesn't yet have a DocumentChunk. Cheap
+    when index is up to date — a single LEFT JOIN check per source
+    type per workspace.
+
+    Run from Celery Beat every hour (see ai_register_beats).
+    """
+    from django.apps import apps as django_apps
+    from ai.models import DocumentChunk, WorkspaceAIConfig
+
+    Issue = django_apps.get_model("db", "Issue")
+    enqueued = 0
+    for cfg in WorkspaceAIConfig.objects.filter(enabled=True, agents_killed=False):
+        indexed_ids = set(
+            DocumentChunk.objects.filter(
+                workspace_id=cfg.workspace_id, source_type=DocumentChunk.SOURCE_WORK_ITEM
+            ).values_list("source_id", flat=True)
+        )
+        candidates = Issue.objects.filter(
+            workspace_id=cfg.workspace_id,
+            deleted_at__isnull=True,
+            is_draft=False,
+        ).exclude(id__in=indexed_ids).values_list("id", "project_id")[:500]
+        for issue_id, project_id in candidates:
+            reindex_source.apply_async(
+                args=[
+                    str(cfg.workspace_id),
+                    str(project_id) if project_id else None,
+                    DocumentChunk.SOURCE_WORK_ITEM,
+                    str(issue_id),
+                ],
+                countdown=2,
+            )
+            enqueued += 1
+    return {"workspaces": cfg.__class__.objects.filter(enabled=True).count(), "enqueued": enqueued}
+
+
 @shared_task(name="ai.orchestrator_tick_all_workspaces")
 def orchestrator_tick_all_workspaces(scan_only: bool = False) -> dict:
     """Periodic dispatcher run from Celery Beat.
