@@ -185,7 +185,7 @@ def decompose_goal(
         system=PLANNER_SYSTEM,
         user=_build_user_prompt(goal),
         cheap=False,
-        max_tokens=2400,
+        max_tokens=6000,
     )
     plan = _validate_plan(raw)
 

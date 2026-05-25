@@ -60,7 +60,12 @@ def ask_json(
     """
     client = _make_client(cfg)
     model = (cfg.chat_model or CHAT_MODEL) if not cheap else CHEAP_MODEL
-    resp = client.chat.completions.create(
+    # DeepSeek supports OpenAI's response_format JSON-only mode —
+    # forces well-formed JSON output, eliminates "Here is the JSON:"
+    # prefixes that we had to strip. Wrap in try/except for providers
+    # that don't support the flag (we fall back to plain text + our
+    # forgiving parser).
+    create_kwargs = dict(
         model=model,
         messages=[
             {"role": "system", "content": system},
@@ -69,6 +74,13 @@ def ask_json(
         temperature=0.1,
         max_tokens=max_tokens,
     )
+    try:
+        resp = client.chat.completions.create(
+            response_format={"type": "json_object"}, **create_kwargs
+        )
+    except Exception as exc:
+        logger.info("ask_json: response_format not supported, retrying plain: %s", exc)
+        resp = client.chat.completions.create(**create_kwargs)
     msg = resp.choices[0].message
     usage = getattr(resp, "usage", None)
     if usage is not None:
