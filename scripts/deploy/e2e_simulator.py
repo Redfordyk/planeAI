@@ -1548,6 +1548,11 @@ def main() -> int:
     for fn in sequence:
         try:
             r = fn(state)
+        except KeyError as e:
+            # state['ws'] / state['project_id'] missing because a
+            # prerequisite test failed. Report as fail not crash.
+            r = TestResult(fn.__name__, "prereq")
+            r.error = f"missing prerequisite state: {e}"
         except Exception as e:
             r = TestResult(fn.__name__, "crash")
             r.error = f"crash: {type(e).__name__}: {e}"
