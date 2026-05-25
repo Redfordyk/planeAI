@@ -130,13 +130,23 @@ class GoalListCreateView(APIView):
             return Response({"error": "title required"}, status=400)
         deadline_raw = request.data.get("deadline")
         try:
-            deadline = date_cls.fromisoformat(deadline_raw) if deadline_raw else None
-        except (TypeError, ValueError):
+            if deadline_raw in (None, "", 0):
+                deadline = None
+            elif isinstance(deadline_raw, str):
+                # Strip off any time component (T...) — accept full ISO
+                # too, just take the date prefix.
+                deadline = date_cls.fromisoformat(deadline_raw.split("T")[0])
+            else:
+                return Response({"error": "bad deadline"}, status=400)
+        except (TypeError, ValueError, AttributeError):
             return Response({"error": "bad deadline"}, status=400)
         constraints = request.data.get("constraints") or {}
         if not isinstance(constraints, dict):
             constraints = {}
         project_ref = request.data.get("project")  # optional — bound to a project up front
+        # Reject non-string/non-UUID project refs cleanly (int/list/etc.)
+        if project_ref is not None and not isinstance(project_ref, str):
+            return Response({"error": "project must be a string"}, status=400)
         project_id = None
         if project_ref:
             from ai.agent_tools import _resolve_project, ToolError
@@ -322,6 +332,14 @@ class TriggerScanView(APIView):
         project_id = request.data.get("project_id")
         if not project_id:
             return Response({"error": "project_id required"}, status=400)
+        # Validate UUID shape before ORM gets to it — Django's UUIDField
+        # raises ValidationError on garbage which DRF doesn't convert to
+        # 400 by default, so the view 500s. Coerce safely here.
+        import uuid as _uuid
+        try:
+            _uuid.UUID(str(project_id))
+        except (TypeError, ValueError, AttributeError):
+            return Response({"error": "project_id must be a UUID"}, status=400)
         try:
             scan = monitor.scan_project(workspace_id, project_id)
         except AgentsHalted as exc:
