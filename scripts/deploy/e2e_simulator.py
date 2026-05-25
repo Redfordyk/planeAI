@@ -122,7 +122,7 @@ def auth_headers(csrf: str | None, json_ct: bool = True) -> dict:
 
 
 def login(email: str, password: str) -> tuple[bool, str]:
-    """Returns (ok, msg)."""
+    """Returns (ok, msg). Plane's session cookie is `session-id`."""
     csrf = csrf_token()
     if not csrf:
         return False, "no_csrf"
@@ -140,9 +140,9 @@ def login(email: str, password: str) -> tuple[bool, str]:
     if err:
         return False, err
     if code in (200, 302):
-        # Check we got session cookie
         names = [c.name for c in jar]
-        return ("sessionid" in names or "session" in str(names).lower(), f"http={code} cookies={names}")
+        has_session = any(n in ("session-id", "sessionid") for n in names)
+        return has_session, f"http={code} cookies={names}"
     return False, f"http={code} body={body[:200]!r}"
 
 
@@ -164,7 +164,7 @@ def workspace_id_from_slug(slug: str) -> str | None:
 # ---- Test scenarios -------------------------------------------------------
 
 
-def t_login() -> TestResult:
+def t_login(state: dict) -> TestResult:
     r = TestResult("auth.login")
     ok, msg = login(EMAIL, PASSWORD)
     r.ok = ok
@@ -193,6 +193,9 @@ def t_index_status(state: dict) -> TestResult:
     if not state.get("ws"):
         r.error = "no ws"
         return r
+    if not state.get("ws"):
+        r.error = "no ws"
+        return r
     code, body, ms, err = request(
         "GET", f"/api/ai/workspaces/{state['ws']}/index-status/"
     )
@@ -213,6 +216,9 @@ def t_index_status(state: dict) -> TestResult:
 
 def t_search(state: dict) -> TestResult:
     r = TestResult("ai.search")
+    if not state.get("ws"):
+        r.error = "no ws"
+        return r
     if not state.get("ws"):
         r.error = "no ws"
         return r
@@ -269,6 +275,9 @@ def t_agent_execute(state: dict) -> TestResult:
 
 def t_goals_list(state: dict) -> TestResult:
     r = TestResult("orch.goals.list")
+    if not state.get("ws"):
+        r.error = "no ws"
+        return r
     if not state.get("ws"):
         r.error = "no ws"
         return r
@@ -335,6 +344,9 @@ def t_goal_apply(state: dict) -> TestResult:
     if not state.get("new_goal_id") or not state.get("project_id"):
         r.error = "missing goal_id or project_id"
         return r
+    if not state.get("ws"):
+        r.error = "no ws"
+        return r
     csrf = csrf_token()
     code, body, ms, err = request(
         "POST",
@@ -363,6 +375,9 @@ def t_goal_report(state: dict) -> TestResult:
     if not state.get("new_goal_id"):
         r.error = "no goal"
         return r
+    if not state.get("ws"):
+        r.error = "no ws"
+        return r
     csrf = csrf_token()
     code, body, ms, err = request(
         "POST",
@@ -390,6 +405,9 @@ def t_trigger_scan(state: dict) -> TestResult:
     r = TestResult("orch.trigger.scan(MONITOR)")
     if not state.get("project_id"):
         r.error = "no project_id"
+        return r
+    if not state.get("ws"):
+        r.error = "no ws"
         return r
     csrf = csrf_token()
     code, body, ms, err = request(
@@ -420,6 +438,9 @@ def t_trigger_scan(state: dict) -> TestResult:
 
 def t_trigger_analyst(state: dict) -> TestResult:
     r = TestResult("orch.trigger.analyst")
+    if not state.get("ws"):
+        r.error = "no ws"
+        return r
     csrf = csrf_token()
     code, body, ms, err = request(
         "POST",
@@ -445,6 +466,9 @@ def t_trigger_analyst(state: dict) -> TestResult:
 
 def t_actions_feed(state: dict) -> TestResult:
     r = TestResult("orch.actions.feed")
+    if not state.get("ws"):
+        r.error = "no ws"
+        return r
     code, body, ms, err = request(
         "GET", f"/api/ai/workspaces/{state['ws']}/orchestrator/actions/"
     )
@@ -465,6 +489,9 @@ def t_actions_feed(state: dict) -> TestResult:
 
 def t_risks_list(state: dict) -> TestResult:
     r = TestResult("orch.risks.list")
+    if not state.get("ws"):
+        r.error = "no ws"
+        return r
     code, body, ms, err = request(
         "GET", f"/api/ai/workspaces/{state['ws']}/orchestrator/risks/"
     )
@@ -486,6 +513,9 @@ def t_risks_list(state: dict) -> TestResult:
 
 def t_kill_switch_get(state: dict) -> TestResult:
     r = TestResult("orch.kill_switch.get")
+    if not state.get("ws"):
+        r.error = "no ws"
+        return r
     code, body, ms, err = request(
         "GET", f"/api/ai/workspaces/{state['ws']}/orchestrator/kill-switch/"
     )
@@ -506,6 +536,9 @@ def t_kill_switch_get(state: dict) -> TestResult:
 
 def t_kill_switch_engage(state: dict) -> TestResult:
     r = TestResult("orch.kill_switch.engage+release")
+    if not state.get("ws"):
+        r.error = "no ws"
+        return r
     csrf = csrf_token()
     code, body, ms, err = request(
         "POST",
@@ -544,6 +577,9 @@ def t_risk_resolve(state: dict) -> TestResult:
         r.notes["skipped"] = "no_open_risks"
         return r
     rid = risks[0]["id"]
+    if not state.get("ws"):
+        r.error = "no ws"
+        return r
     csrf = csrf_token()
     code, body, ms, err = request(
         "POST",
@@ -563,6 +599,9 @@ def t_risk_resolve(state: dict) -> TestResult:
 
 def t_usage_stats(state: dict) -> TestResult:
     r = TestResult("ai.usage.stats")
+    if not state.get("ws"):
+        r.error = "no ws"
+        return r
     code, body, ms, err = request(
         "GET", f"/api/ai/workspaces/{state['ws']}/usage/stats/"
     )
