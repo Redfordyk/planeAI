@@ -1970,7 +1970,7 @@ def _gen_edge_30() -> list:
         ({"title": "ok", "constraints": {"budget": float("inf")}}, "inf_in_constraints"),
         ({"title": " "}, "whitespace_title"),
         ({"title": "\n\n\n"}, "newlines_title"),
-        ({"title": " "}, "null_byte_title"),
+        ({"title": ""}, "null_byte_title"),
         ({"title": "tab\there"}, "tab_in_title"),
         ({}, "empty_body"),
         ({"unknown_field": "xxx"}, "only_unknown_field"),
