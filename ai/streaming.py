@@ -39,6 +39,99 @@ from ai.usage import record_usage
 logger = logging.getLogger("plane.ai.streaming")
 
 
+async def _deepseek_stream(
+    *,
+    cfg,
+    system: str,
+    messages: list[dict],
+    workspace_id,
+    user_id,
+    feature: str,
+    model: str,
+    max_tokens: int,
+    temperature: float,
+) -> AsyncIterator[str]:
+    """SSE frames sourced from DeepSeek's OpenAI-compatible streaming
+    chat completion. Same frame contract as Anthropic path.
+
+    Anthropic and OpenAI message shapes differ slightly: Claude expects
+    content as a list of blocks, OpenAI as a string. The retrieval path
+    builds messages in Claude format; here we flatten to OpenAI.
+    """
+    import httpx as _httpx_mod
+    import openai as _openai
+
+    def _flatten(msg):
+        c = msg.get("content")
+        if isinstance(c, str):
+            return {"role": msg["role"], "content": c}
+        if isinstance(c, list):
+            parts = []
+            for blk in c:
+                if isinstance(blk, dict) and blk.get("type") == "text":
+                    parts.append(blk.get("text", ""))
+                elif isinstance(blk, str):
+                    parts.append(blk)
+            return {"role": msg["role"], "content": "".join(parts)}
+        return {"role": msg["role"], "content": str(c or "")}
+
+    chat_messages = [{"role": "system", "content": system}] + [_flatten(m) for m in messages]
+
+    http = _httpx_mod.AsyncClient(timeout=_httpx_mod.Timeout(60.0, connect=10.0))
+    client = _openai.AsyncOpenAI(
+        api_key=cfg.anthropic_key,  # cfg slot reused for chat key
+        base_url="https://api.deepseek.com/v1",
+        max_retries=0,
+        http_client=http,
+    )
+
+    in_tokens = 0
+    out_tokens = 0
+    try:
+        stream = await client.chat.completions.create(
+            model=model,
+            messages=chat_messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stream=True,
+            stream_options={"include_usage": True},
+        )
+        async for chunk in stream:
+            if getattr(chunk, "usage", None):
+                in_tokens = chunk.usage.prompt_tokens or 0
+                out_tokens = chunk.usage.completion_tokens or 0
+            for choice in chunk.choices or []:
+                delta = getattr(choice, "delta", None)
+                if delta and getattr(delta, "content", None):
+                    yield _sse({"delta": delta.content})
+    except _openai.AuthenticationError:
+        logger.warning("deepseek_stream: auth error (ws=%s)", workspace_id)
+        yield _sse({"error": "Неверный ключ — проверьте настройки воркспейса"})
+        return
+    except _openai.RateLimitError:
+        yield _sse({"error": "Лимит запросов исчерпан"})
+        return
+    except Exception as exc:  # noqa
+        logger.exception("deepseek_stream failed ws=%s", workspace_id)
+        yield _sse({"error": f"{type(exc).__name__}: {exc}"})
+        return
+    finally:
+        try:
+            await http.aclose()
+        except Exception:
+            pass
+
+    if in_tokens or out_tokens:
+        await sync_to_async(record_usage)(
+            workspace_id=workspace_id,
+            user_id=user_id,
+            feature=feature,
+            model=model,
+            usage={"input_tokens": in_tokens, "output_tokens": out_tokens},
+        )
+    yield _sse({"done": True, "usage": {"input_tokens": in_tokens, "output_tokens": out_tokens}})
+
+
 def _sse(event: dict) -> str:
     """Format one SSE frame. The double newline terminator is part of
     the protocol — without it, the browser EventSource never emits the
@@ -70,7 +163,26 @@ async def claude_sse(
 
     chosen_model = model or (cfg.chat_model if cfg else providers.CHAT_MODEL)
 
-    client = anthropic.AsyncAnthropic(api_key=cfg.anthropic_key, max_retries=0)
+    # Route DeepSeek-named models via the OpenAI-compatible streaming
+    # endpoint at api.deepseek.com — they speak the OpenAI protocol,
+    # not Anthropic's. Falls back to Anthropic for everything else.
+    if chosen_model.startswith("deepseek-"):
+        async for frame in _deepseek_stream(
+            cfg=cfg, system=system, messages=messages,
+            workspace_id=workspace_id, user_id=user_id, feature=feature,
+            model=chosen_model, max_tokens=max_tokens, temperature=temperature,
+        ):
+            yield frame
+        return
+
+    # anthropic SDK + httpx>=0.28 mismatch on the `proxies` kwarg —
+    # construct our own async httpx client so the SDK doesn't try to
+    # pass it.
+    import httpx as _httpx_mod
+    _http = _httpx_mod.AsyncClient(timeout=_httpx_mod.Timeout(60.0, connect=10.0))
+    client = anthropic.AsyncAnthropic(
+        api_key=cfg.anthropic_key, max_retries=0, http_client=_http
+    )
 
     final_usage = None
     try:

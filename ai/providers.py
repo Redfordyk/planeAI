@@ -89,7 +89,11 @@ class ClaudeChat:
     def __init__(self, api_key: str) -> None:
         # max_retries=0: the SDK has a built-in retry but we want to
         # see and log each attempt. We retry in `complete` below.
-        self.client = anthropic.Anthropic(api_key=api_key, max_retries=0)
+        # Hand SDK our own httpx.Client to dodge the openai/anthropic
+        # vs httpx>=0.28 `proxies` kwarg mismatch.
+        import httpx
+        http = httpx.Client(timeout=httpx.Timeout(60.0, connect=10.0))
+        self.client = anthropic.Anthropic(api_key=api_key, max_retries=0, http_client=http)
 
     def complete(
         self,
