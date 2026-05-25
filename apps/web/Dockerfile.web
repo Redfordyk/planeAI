@@ -80,6 +80,11 @@ FROM nginx:1.27-alpine AS production
 COPY apps/web/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --from=installer /app/apps/web/build/client /usr/share/nginx/html
 
+# planeAI: replace Workbox SW with a self-unregister noop so deploys
+# never get pinned to stale React Router manifests via SW precache.
+COPY deploy-local/sw-noop.js /usr/share/nginx/html/sw.js
+RUN rm -f /usr/share/nginx/html/sw.js.map
+
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
