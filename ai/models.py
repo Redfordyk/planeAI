@@ -139,6 +139,19 @@ class WorkspaceAIConfig(models.Model):
     # of embedding traffic at current pricing. Overrideable per ws.
     monthly_token_budget = models.BigIntegerField(default=5_000_000)
     enabled = models.BooleanField(default=False)
+    # planeAI orchestrator kill-switch (TZ 11.2). When True, the
+    # multi-agent dispatcher refuses to schedule any new event — runs
+    # already in flight finish, nothing new starts. Flipped from the UI
+    # or `manage.py ai_kill_switch`. Does NOT touch ``enabled`` so the
+    # base AI features (search, voice) keep working.
+    agents_killed = models.BooleanField(default=False)
+    # Per-workspace cap on agent ACTIONS (writes) per rolling hour. The
+    # circuit breaker compares AgentAction count over the last 1h to
+    # this value and refuses new actions when it's hit, until the hour
+    # rolls forward or the breaker is manually reset. Independent of
+    # the token budget — protects against runaway action loops even
+    # when each action is cheap.
+    max_agent_actions_per_hour = models.IntegerField(default=60)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -386,3 +399,385 @@ class AIProjectSettings(models.Model):
 
     def __str__(self) -> str:
         return f"AISettings({self.project_id}, exclude={self.exclude_from_ai})"
+
+
+# ---------------------------------------------------------------------------
+# planeAI Multi-Agent Orchestrator (phases 7-12)
+# ---------------------------------------------------------------------------
+#
+# Four tables that let a system of agents drive a project from a
+# user-stated goal to completion. They live in our `ai` schema (never
+# add columns to Plane models — CLAUDE.md invariant 6).
+#
+#   ProjectGoal     — user-stated outcome ("ship MVP by July 15")
+#   AgentAction     — append-only audit of every agentic decision
+#   PredictedRisk   — risk row produced by MONITOR (delay/blocker/...)
+#   TeamVelocity    — completed-issue stats feeding ANALYST + MONITOR
+#
+# All four carry workspace_id so isolation (CLAUDE.md invariant 1) is
+# enforced at the DB level, not just at the view layer.
+
+
+class ProjectGoal(models.Model):
+    """A user-stated outcome the orchestrator drives toward.
+
+    The goal owns the plan tree (issues created by PLANNER point back
+    through their project + the goal's project_id) and the timeline
+    (deadline). State machine is intentionally tiny:
+
+        draft → planning → executing → at_risk ↔ executing → done
+                                              ↘ blocked
+
+    `constraints` is freeform JSON for budget, team size, MVP-vs-full
+    scope, allowed_freelancers, etc. PLANNER reads it as advisory
+    context, not as machine-verified facts.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    workspace = models.ForeignKey(
+        "db.Workspace",
+        on_delete=models.CASCADE,
+        related_name="ai_goals",
+    )
+    project = models.ForeignKey(
+        "db.Project",
+        on_delete=models.CASCADE,
+        related_name="ai_goals",
+        null=True,
+        blank=True,
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default="")
+    deadline = models.DateField(null=True, blank=True)
+    constraints = models.JSONField(default=dict, blank=True)
+
+    STATUS_DRAFT = "draft"
+    STATUS_PLANNING = "planning"
+    STATUS_EXECUTING = "executing"
+    STATUS_AT_RISK = "at_risk"
+    STATUS_BLOCKED = "blocked"
+    STATUS_DONE = "done"
+    STATUS_CHOICES = (
+        (STATUS_DRAFT, "draft"),
+        (STATUS_PLANNING, "planning"),
+        (STATUS_EXECUTING, "executing"),
+        (STATUS_AT_RISK, "at_risk"),
+        (STATUS_BLOCKED, "blocked"),
+        (STATUS_DONE, "done"),
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    # PLANNER stores the JSON tree (epics → tasks → subtasks) before
+    # creating issues, so the UI can preview before the user confirms.
+    plan_preview = models.JSONField(default=dict, blank=True)
+    # IDs of Issues actually created from the plan. JSON list of UUIDs.
+    plan_issue_ids = models.JSONField(default=list, blank=True)
+
+    created_by = models.ForeignKey(
+        "db.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ai_goals_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "ai_project_goal"
+        verbose_name = "AI project goal"
+        verbose_name_plural = "AI project goals"
+        indexes = [
+            models.Index(
+                fields=["workspace", "status"],
+                name="ai_goal_ws_status_idx",
+            ),
+            models.Index(
+                fields=["deadline"],
+                name="ai_goal_deadline_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"Goal({self.title[:40]})"
+
+
+class AgentAction(models.Model):
+    """Append-only record of every decision the multi-agent system
+    made. Distinct from AIAgentActionLog (TZ 5.2) — that one logs
+    *tool* calls of the single-issue agent worker; THIS one logs
+    higher-level orchestrator decisions (route an event, decompose a
+    goal, escalate a risk).
+
+    `agent_type` identifies which of the 7 agents fired
+    (PLANNER/MONITOR/EXECUTOR/ESCALATOR/ANALYST/COMMUNICATOR/
+    ORCHESTRATOR). `risk_level` mirrors the Decision Layer matrix
+    (AUTO/NOTIFY/CONFIRM/ESCALATE) — useful for filtering the activity
+    feed by "things the system did on its own" vs "things waiting on
+    a human".
+
+    `reasoning` is the model's short rationale ("assigning to Vova:
+    lowest current load, has done iOS UI before"). Cap at ~1KB; if
+    you need more, link to a separate page.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    workspace = models.ForeignKey(
+        "db.Workspace",
+        on_delete=models.CASCADE,
+        related_name="ai_agent_actions",
+    )
+    project = models.ForeignKey(
+        "db.Project",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="ai_agent_actions",
+    )
+    goal = models.ForeignKey(
+        "ai.ProjectGoal",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="actions",
+    )
+    # Target Issue (when the action touched one). Loose UUID — Plane's
+    # Issue may be soft-deleted later and we don't want the audit row
+    # to vanish.
+    target_issue_id = models.UUIDField(null=True, blank=True)
+
+    AGENT_PLANNER = "PLANNER"
+    AGENT_MONITOR = "MONITOR"
+    AGENT_EXECUTOR = "EXECUTOR"
+    AGENT_ESCALATOR = "ESCALATOR"
+    AGENT_ANALYST = "ANALYST"
+    AGENT_COMMUNICATOR = "COMMUNICATOR"
+    AGENT_ORCHESTRATOR = "ORCHESTRATOR"
+    AGENT_CHOICES = (
+        (AGENT_PLANNER, "PLANNER"),
+        (AGENT_MONITOR, "MONITOR"),
+        (AGENT_EXECUTOR, "EXECUTOR"),
+        (AGENT_ESCALATOR, "ESCALATOR"),
+        (AGENT_ANALYST, "ANALYST"),
+        (AGENT_COMMUNICATOR, "COMMUNICATOR"),
+        (AGENT_ORCHESTRATOR, "ORCHESTRATOR"),
+    )
+    agent_type = models.CharField(max_length=20, choices=AGENT_CHOICES)
+    action_type = models.CharField(max_length=60)
+    input = models.JSONField(default=dict, blank=True)
+    output = models.JSONField(default=dict, blank=True)
+    reasoning = models.TextField(blank=True, default="")
+
+    RISK_AUTO = "AUTO"
+    RISK_NOTIFY = "NOTIFY"
+    RISK_CONFIRM = "CONFIRM"
+    RISK_ESCALATE = "ESCALATE"
+    RISK_CHOICES = (
+        (RISK_AUTO, "AUTO"),
+        (RISK_NOTIFY, "NOTIFY"),
+        (RISK_CONFIRM, "CONFIRM"),
+        (RISK_ESCALATE, "ESCALATE"),
+    )
+    risk_level = models.CharField(max_length=12, choices=RISK_CHOICES, default=RISK_AUTO)
+
+    STATUS_PROPOSED = "proposed"
+    STATUS_APPLIED = "applied"
+    STATUS_REJECTED = "rejected"
+    STATUS_AWAITING_USER = "awaiting_user"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = (
+        (STATUS_PROPOSED, "proposed"),
+        (STATUS_APPLIED, "applied"),
+        (STATUS_REJECTED, "rejected"),
+        (STATUS_AWAITING_USER, "awaiting_user"),
+        (STATUS_FAILED, "failed"),
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_APPLIED)
+    approved_by_user = models.ForeignKey(
+        "db.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ai_actions_approved",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "ai_agent_action"
+        verbose_name = "AI agent action (orchestrator)"
+        verbose_name_plural = "AI agent actions (orchestrator)"
+        indexes = [
+            models.Index(
+                fields=["workspace", "created_at"],
+                name="ai_act_ws_time_idx",
+            ),
+            models.Index(
+                fields=["agent_type", "status"],
+                name="ai_act_agent_status_idx",
+            ),
+            models.Index(
+                fields=["target_issue_id"],
+                name="ai_act_issue_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.agent_type}/{self.action_type}@{self.created_at:%H:%M}"
+
+
+class PredictedRisk(models.Model):
+    """A risk the MONITOR detected for one issue.
+
+    Confidence is a float in [0, 1] — heuristic version reports a
+    coarse 0.5/0.7/0.9 ladder; ML upgrade (LightGBM later) will fill
+    it densely. `suggested_actions` is JSON the ESCALATOR consumes
+    when surfacing options to the PM ("hire freelancer / simplify
+    scope / move deadline").
+
+    Risks are dedupe'd by (issue_id, risk_type, resolved=False) — a
+    second MONITOR pass on the same issue UPDATES the existing row
+    rather than creating a duplicate.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    workspace = models.ForeignKey(
+        "db.Workspace",
+        on_delete=models.CASCADE,
+        related_name="ai_risks",
+    )
+    project = models.ForeignKey(
+        "db.Project",
+        on_delete=models.CASCADE,
+        related_name="ai_risks",
+    )
+    issue_id = models.UUIDField()
+    goal = models.ForeignKey(
+        "ai.ProjectGoal",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="risks",
+    )
+
+    TYPE_DELAY = "delay"
+    TYPE_BLOCKER = "blocker"
+    TYPE_OVERLOAD = "overload"
+    TYPE_DEPENDENCY = "dependency"
+    TYPE_CHOICES = (
+        (TYPE_DELAY, "delay"),
+        (TYPE_BLOCKER, "blocker"),
+        (TYPE_OVERLOAD, "overload"),
+        (TYPE_DEPENDENCY, "dependency"),
+    )
+    risk_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    confidence = models.FloatField(default=0.5)
+
+    IMPACT_LOW = "low"
+    IMPACT_MEDIUM = "medium"
+    IMPACT_HIGH = "high"
+    IMPACT_CRITICAL = "critical"
+    IMPACT_CHOICES = (
+        (IMPACT_LOW, "low"),
+        (IMPACT_MEDIUM, "medium"),
+        (IMPACT_HIGH, "high"),
+        (IMPACT_CRITICAL, "critical"),
+    )
+    impact = models.CharField(max_length=12, choices=IMPACT_CHOICES, default=IMPACT_MEDIUM)
+    rationale = models.TextField(blank=True, default="")
+    suggested_actions = models.JSONField(default=list, blank=True)
+    resolved = models.BooleanField(default=False)
+    escalated_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "ai_predicted_risk"
+        verbose_name = "AI predicted risk"
+        verbose_name_plural = "AI predicted risks"
+        indexes = [
+            models.Index(
+                fields=["workspace", "resolved", "impact"],
+                name="ai_risk_ws_open_idx",
+            ),
+            models.Index(
+                fields=["issue_id", "risk_type"],
+                name="ai_risk_issue_idx",
+            ),
+        ]
+        constraints = [
+            # One open risk per (issue, risk_type). Re-detection
+            # updates the existing row.
+            models.UniqueConstraint(
+                fields=["issue_id", "risk_type"],
+                condition=models.Q(resolved=False),
+                name="ai_risk_unique_open",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.risk_type}/{self.impact}@{self.issue_id}"
+
+
+class TeamVelocity(models.Model):
+    """Per-user task completion stats feeding ANALYST + MONITOR.
+
+    One row per completed Issue (recorded when issue.state transitions
+    to a 'completed' group). `estimated_hours` / `actual_hours` are
+    nullable because Plane's estimate column is optional — when both
+    are present, ANALYST can compute over/under-estimate patterns.
+
+    `task_type` is the most-prominent Plane label on the issue, or
+    "uncategorised" — gives ANALYST a grouping dimension richer than
+    raw user totals.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    workspace = models.ForeignKey(
+        "db.Workspace",
+        on_delete=models.CASCADE,
+        related_name="ai_velocity",
+    )
+    project = models.ForeignKey(
+        "db.Project",
+        on_delete=models.CASCADE,
+        related_name="ai_velocity",
+    )
+    user = models.ForeignKey(
+        "db.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ai_velocity",
+    )
+    issue_id = models.UUIDField()
+    task_type = models.CharField(max_length=60, default="uncategorised")
+    estimated_hours = models.FloatField(null=True, blank=True)
+    actual_hours = models.FloatField(null=True, blank=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "ai_team_velocity"
+        verbose_name = "AI team velocity sample"
+        verbose_name_plural = "AI team velocity samples"
+        indexes = [
+            models.Index(
+                fields=["workspace", "completed_at"],
+                name="ai_vel_ws_time_idx",
+            ),
+            models.Index(
+                fields=["user", "task_type"],
+                name="ai_vel_user_type_idx",
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["issue_id"],
+                name="ai_vel_unique_per_issue",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"Velocity({self.user_id}, {self.task_type})"
