@@ -195,6 +195,50 @@ def run_agent_on_workitem(self, issue_id):
     return result
 
 
+@shared_task(
+    name="ai.orchestrator_handle_event",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=15,
+    acks_late=False,
+)
+def orchestrator_handle_event(self, event_dict: dict) -> dict:
+    """Phase 11.1 — entry point for the multi-agent router.
+
+    Thin Celery wrapper: import the router lazily (so a missing
+    module doesn't break signal connection at app-ready time), call
+    ``handle_event``, return its summary dict. Errors are caught
+    inside ``handle_event`` — this wrapper only retries on genuine
+    infra issues (DB blip).
+    """
+    from ai.orchestrator.router import handle_event
+    return handle_event(event_dict)
+
+
+@shared_task(name="ai.planner_decompose_goal", bind=True, max_retries=1)
+def planner_decompose_goal(self, goal_id: str) -> dict:
+    """Phase 7.3 — Celery wrapper around PLANNER.decompose_goal.
+
+    Used by the goal-create endpoint when ``async_planning=True`` is
+    requested; the synchronous path runs PLANNER inline."""
+    from ai.models import ProjectGoal, WorkspaceAIConfig
+    from ai.orchestrator import planner
+    goal = ProjectGoal.objects.filter(id=goal_id).first()
+    if goal is None:
+        return {"status": "skipped", "reason": "goal_missing"}
+    cfg = WorkspaceAIConfig.objects.filter(
+        workspace_id=goal.workspace_id, enabled=True
+    ).first()
+    if cfg is None or not cfg.anthropic_key:
+        return {"status": "skipped", "reason": "no_ai_config"}
+    plan, action = planner.decompose_goal(goal=goal, cfg=cfg)
+    return {
+        "status": "ok",
+        "task_count": plan.get("task_count", 0),
+        "action_id": str(action.id),
+    }
+
+
 @shared_task(name="ai.delete_chunks")
 def delete_chunks(source_type: str, source_id: str) -> int:
     """Remove all chunks for a deleted source object.

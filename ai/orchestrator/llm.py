@@ -1,0 +1,141 @@
+"""Thin LLM helper for orchestrator agents.
+
+Wraps the DeepSeek-compatible OpenAI client (the same one
+``ai.agent_loop`` uses) with a single ``ask_json`` call: send a
+system + user prompt, expect a JSON response back, parse + return.
+
+We use this for agents that don't need tool-use (PLANNER's plan
+generation, ANALYST's insight write-up, COMMUNICATOR's status text).
+Tool-using agents reuse ``ai.agent_loop.run_agent`` directly.
+
+Token accounting goes through ``ai.usage.record_usage`` so the
+month-budget gate works the same as everywhere else.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from typing import Any
+
+import httpx
+import openai
+
+from ai.models import AIUsageLog, WorkspaceAIConfig
+from ai.providers import CHAT_MODEL, CHEAP_MODEL
+from ai.usage import record_usage
+
+
+logger = logging.getLogger("plane.ai.orchestrator.llm")
+
+
+def _make_client(cfg: WorkspaceAIConfig):
+    """Same shim as ai.agent_loop — DeepSeek is OpenAI-compatible."""
+    base_url = "https://api.deepseek.com/v1"
+    http = httpx.Client(timeout=httpx.Timeout(60.0, connect=10.0))
+    return openai.OpenAI(
+        api_key=cfg.anthropic_key,  # field reused for chat key
+        base_url=base_url,
+        max_retries=0,
+        http_client=http,
+    )
+
+
+def ask_json(
+    *,
+    workspace_id,
+    cfg: WorkspaceAIConfig,
+    system: str,
+    user: str,
+    cheap: bool = False,
+    user_id=None,
+    feature: str = AIUsageLog.FEATURE_AGENT,
+    max_tokens: int = 1500,
+) -> dict[str, Any]:
+    """Send system + user, parse JSON reply. Returns ``{}`` on bad JSON.
+
+    The system prompt MUST end with an explicit "respond with JSON
+    only" instruction — DeepSeek follows it well, but the parser
+    here is forgiving (strips ```json fences, falls back to ``{}``).
+    """
+    client = _make_client(cfg)
+    model = (cfg.chat_model or CHAT_MODEL) if not cheap else CHEAP_MODEL
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        temperature=0.1,
+        max_tokens=max_tokens,
+    )
+    msg = resp.choices[0].message
+    usage = getattr(resp, "usage", None)
+    if usage is not None:
+        record_usage(
+            workspace_id=workspace_id,
+            user_id=user_id,
+            feature=feature,
+            model=model,
+            usage={
+                "input_tokens": usage.prompt_tokens,
+                "output_tokens": usage.completion_tokens,
+            },
+        )
+    text = (msg.content or "").strip()
+    # Strip code fences if present
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+        if text.endswith("```"):
+            text = text[: -3]
+        text = text.strip()
+    # Find first { or [ — DeepSeek sometimes prefixes "Here is the JSON:"
+    for opener in ("{", "["):
+        idx = text.find(opener)
+        if idx >= 0:
+            text = text[idx:]
+            break
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        logger.warning("ask_json: bad JSON from LLM: %s (text head: %r)", e, text[:200])
+        return {}
+
+
+def ask_text(
+    *,
+    workspace_id,
+    cfg: WorkspaceAIConfig,
+    system: str,
+    user: str,
+    cheap: bool = True,
+    user_id=None,
+    feature: str = AIUsageLog.FEATURE_AGENT,
+    max_tokens: int = 800,
+) -> str:
+    """Send + return plain text (no JSON parsing). Used by COMMUNICATOR
+    for the weekly status markdown."""
+    client = _make_client(cfg)
+    model = (cfg.chat_model or CHAT_MODEL) if not cheap else CHEAP_MODEL
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        temperature=0.3,
+        max_tokens=max_tokens,
+    )
+    usage = getattr(resp, "usage", None)
+    if usage is not None:
+        record_usage(
+            workspace_id=workspace_id,
+            user_id=user_id,
+            feature=feature,
+            model=model,
+            usage={
+                "input_tokens": usage.prompt_tokens,
+                "output_tokens": usage.completion_tokens,
+            },
+        )
+    return (resp.choices[0].message.content or "").strip()

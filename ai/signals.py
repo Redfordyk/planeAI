@@ -118,6 +118,63 @@ def _on_issue_deleted(sender, instance, **kwargs):
     delete_chunks.delay(DocumentChunk.SOURCE_WORK_ITEM, str(instance.id))
 
 
+# ---- Orchestrator Event Stream (TZ 8.1) ----------------------------------
+#
+# Emit a typed Event into Celery whenever an Issue changes. Loop
+# protection lives in TWO places: the ``_modified_by_agent`` flag
+# (set by EXECUTOR/PLANNER on the instance right before save) is
+# carried into the event, and the router drops events with that flag
+# set. Plus the orchestrator has its own per-event dedupe + per-issue
+# lock.
+
+
+def _on_issue_orchestrator_event(sender, instance, created, **kwargs):
+    if _soft_deleted(instance):
+        return
+    if getattr(instance, "is_draft", False):
+        return
+    if not _ai_enabled(instance.workspace_id):
+        return
+    if _project_excluded(instance.project_id):
+        return
+
+    # Classify the event. Order matters — completed beats updated.
+    from ai.orchestrator.events import (
+        Event,
+        ISSUE_CREATED,
+        ISSUE_UPDATED,
+        ISSUE_COMPLETED,
+        ISSUE_BLOCKED,
+    )
+    state = getattr(instance, "state", None)
+    group = (getattr(state, "group", "") or "").lower()
+    if group == "completed":
+        etype = ISSUE_COMPLETED
+    elif group == "blocked":
+        etype = ISSUE_BLOCKED
+    elif created:
+        etype = ISSUE_CREATED
+    else:
+        etype = ISSUE_UPDATED
+
+    event = Event(
+        type=etype,
+        workspace_id=str(instance.workspace_id),
+        project_id=str(instance.project_id) if instance.project_id else None,
+        issue_id=str(instance.id),
+        modified_by_agent=bool(getattr(instance, "_modified_by_agent", False)),
+    )
+
+    def _enqueue():
+        from ai.tasks import orchestrator_handle_event
+        try:
+            orchestrator_handle_event.apply_async(args=[event.to_dict()], countdown=2)
+        except Exception as exc:
+            logger.warning("orchestrator enqueue failed for %s: %s", instance.id, exc)
+
+    transaction.on_commit(_enqueue)
+
+
 # ---- IssueComment ---------------------------------------------------------
 
 
@@ -240,6 +297,13 @@ def connect() -> None:
 
     post_save.connect(
         on_issue_saved_for_agent, sender=Issue, dispatch_uid="ai.agent_trigger"
+    )
+
+    # TZ 8.1 — orchestrator event stream (post-Plane-save → Celery → router).
+    post_save.connect(
+        _on_issue_orchestrator_event,
+        sender=Issue,
+        dispatch_uid="ai.orchestrator_event_stream",
     )
 
     post_save.connect(

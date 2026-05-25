@@ -21,6 +21,18 @@ from ai.alerting import AlertWebhookView
 from ai.health import HealthView
 from ai.metrics import MetricsView
 from ai.usage_views import UsageStatsView
+from ai.orchestrator.api import (
+    ActivityFeedView,
+    GoalApplyView,
+    GoalDetailView,
+    GoalListCreateView,
+    GoalReportView,
+    KillSwitchView,
+    RiskListView,
+    RiskResolveView,
+    TriggerAnalystView,
+    TriggerScanView,
+)
 from ai.views import (
     AgentExecuteView,
     IndexStatusView,
@@ -89,5 +101,56 @@ urlpatterns = [
         "workspaces/<uuid:workspace_id>/usage/stats/",
         UsageStatsView.as_view(),
         name="usage-stats",
+    ),
+    # --- Phases 7-12: Multi-agent orchestrator ----------------------
+    path(
+        "workspaces/<uuid:workspace_id>/orchestrator/goals/",
+        GoalListCreateView.as_view(),
+        name="orch-goals",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/orchestrator/goals/<uuid:goal_id>/",
+        GoalDetailView.as_view(),
+        name="orch-goal-detail",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/orchestrator/goals/<uuid:goal_id>/apply/",
+        GoalApplyView.as_view(),
+        name="orch-goal-apply",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/orchestrator/goals/<uuid:goal_id>/report/",
+        GoalReportView.as_view(),
+        name="orch-goal-report",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/orchestrator/actions/",
+        ActivityFeedView.as_view(),
+        name="orch-actions",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/orchestrator/risks/",
+        RiskListView.as_view(),
+        name="orch-risks",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/orchestrator/risks/<uuid:risk_id>/resolve/",
+        RiskResolveView.as_view(),
+        name="orch-risk-resolve",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/orchestrator/kill-switch/",
+        KillSwitchView.as_view(),
+        name="orch-kill-switch",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/orchestrator/trigger/scan/",
+        TriggerScanView.as_view(),
+        name="orch-trigger-scan",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/orchestrator/trigger/analyst/",
+        TriggerAnalystView.as_view(),
+        name="orch-trigger-analyst",
     ),
 ]
