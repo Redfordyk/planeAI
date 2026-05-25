@@ -87,6 +87,14 @@ export const coreRoutes: RouteConfigEntry[] = [
           route(":workspaceSlug/notifications", "./(all)/[workspaceSlug]/(projects)/notifications/page.tsx"),
         ]),
 
+        // planeAI — Multi-Agent Orchestrator (phase 12.1)
+        layout("./(all)/[workspaceSlug]/(projects)/ai-orchestrator/layout.tsx", [
+          route(
+            ":workspaceSlug/ai-orchestrator",
+            "./(all)/[workspaceSlug]/(projects)/ai-orchestrator/page.tsx"
+          ),
+        ]),
+
         // Profile
         layout("./(all)/[workspaceSlug]/(projects)/profile/[userId]/layout.tsx", [
           route(":workspaceSlug/profile/:userId", "./(all)/[workspaceSlug]/(projects)/profile/[userId]/page.tsx"),

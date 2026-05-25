@@ -25,6 +25,7 @@ import { InboxIcon } from "@plane/propel/icons";
 import useSWR from "swr";
 import { useWorkspaceNotifications } from "@/hooks/store/notifications";
 import { useWorkspace } from "@/hooks/store/use-workspace";
+import { Link } from "react-router";
 // planeAI
 import { AISearchPanel } from "@/components/ai";
 
@@ -96,14 +97,14 @@ export const TopNavigationRoot = observer(function TopNavigationRoot() {
               </button>
             </Tooltip>
             <Tooltip tooltipContent="Оркестратор: цели, агенты, риски" position="bottom">
-              <a
-                href={`/${slugStr}/ai-orchestrator/`}
-                className="flex h-8 items-center gap-1.5 rounded-md bg-custom-background-90 px-2.5 text-xs font-medium text-custom-text-200 hover:bg-custom-background-80 transition-colors"
+              <Link
+                to={`/${slugStr}/ai-orchestrator`}
+                className="flex h-8 items-center gap-1.5 rounded-md bg-layer-2 px-2.5 text-xs font-medium text-secondary transition-colors hover:bg-layer-2-hover"
                 aria-label="Открыть ИИ-оркестратора"
               >
                 <span aria-hidden="true">🤖</span>
                 <span>Оркестратор</span>
-              </a>
+              </Link>
             </Tooltip>
           </>
         )}
