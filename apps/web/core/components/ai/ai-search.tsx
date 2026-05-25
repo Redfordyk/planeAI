@@ -85,9 +85,13 @@ export function AISearch({
 
   const isStreaming = status === "streaming";
   const indexReady = index?.ready ?? true;
-  const inputDisabled = mode === "search" ? !indexReady : false;
+  // Текстовое поле всегда доступно — пользователь может писать
+  // и пока индекс докатывается. Кнопка отправки тоже активна; если
+  // индекс не готов, поиск всё равно сработает по тому, что уже
+  // проиндексировано (просто с меньшим покрытием).
+  const inputDisabled = false;
   const busy = isStreaming || agentLoading || voice.state !== "idle" || transcribing;
-  const canSubmit = draft.trim().length > 0 && !busy && !inputDisabled;
+  const canSubmit = draft.trim().length > 0 && !busy;
 
   const onMicToggle = useCallback(async () => {
     if (voice.state === "recording") {
@@ -405,7 +409,7 @@ function IndexBanner({
           <Hourglass className="size-3.5" />
           Индексация: {index.indexed}/{index.total} ({Math.round(index.coverage * 100)}%)
         </span>
-        <span className="text-caption-sm opacity-70">Поиск временно выключен</span>
+        <span className="text-caption-sm opacity-70">Поиск может быть неполным</span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-warning-subtle-hover">
         <div
