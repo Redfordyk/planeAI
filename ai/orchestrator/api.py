@@ -117,7 +117,15 @@ class GoalListCreateView(APIView):
         ok, err, cfg, http = _user_can_use_ai(request.user, workspace_id)
         if not ok:
             return Response({"error": err}, status=http)
-        title = (request.data.get("title") or "").strip()
+        # Coerce title to string defensively — clients may send int,
+        # null, array etc. We don't want a TypeError 500 on bad input.
+        raw_title = request.data.get("title")
+        if raw_title is None:
+            title = ""
+        elif isinstance(raw_title, (list, dict)):
+            return Response({"error": "title must be string"}, status=400)
+        else:
+            title = str(raw_title).strip()
         if not title:
             return Response({"error": "title required"}, status=400)
         deadline_raw = request.data.get("deadline")
@@ -196,6 +204,8 @@ class GoalApplyView(APIView):
             result = planner.apply_plan(goal=goal, user=request.user, project_ref=project_ref)
         except ToolError as e:
             return Response({"error": str(e)}, status=400)
+        except AgentsHalted as e:
+            return Response({"error": "agents_halted", "reason": str(e)}, status=423)
         return Response({"applied": result, "goal": _goal_to_dict(goal)}, status=201)
 
 
@@ -209,7 +219,10 @@ class GoalReportView(APIView):
         goal = ProjectGoal.objects.filter(id=goal_id, workspace_id=workspace_id).first()
         if goal is None:
             return Response({"error": "not_found"}, status=404)
-        report = communicator.status_report(goal=goal, cfg=cfg)
+        try:
+            report = communicator.status_report(goal=goal, cfg=cfg)
+        except AgentsHalted as e:
+            return Response({"error": "agents_halted", "reason": str(e)}, status=423)
         return Response({"report": report})
 
 
