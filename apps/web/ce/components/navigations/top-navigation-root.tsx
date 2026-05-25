@@ -26,6 +26,7 @@ import useSWR from "swr";
 import { useWorkspaceNotifications } from "@/hooks/store/notifications";
 import { useWorkspace } from "@/hooks/store/use-workspace";
 import { Link } from "react-router";
+import { Bot, Sparkles } from "lucide-react";
 // planeAI
 import { AISearchPanel } from "@/components/ai";
 
@@ -89,20 +90,20 @@ export const TopNavigationRoot = observer(function TopNavigationRoot() {
               <button
                 type="button"
                 onClick={() => setAiOpen(true)}
-                className="flex h-8 items-center gap-1.5 rounded-md bg-custom-primary-100/10 px-2.5 text-xs font-medium text-custom-primary-100 hover:bg-custom-primary-100/20 transition-colors"
+                className="flex h-8 items-center gap-1.5 rounded-md px-2 text-body-xs font-medium text-secondary transition-colors hover:bg-layer-2-hover hover:text-primary"
                 aria-label="Открыть ИИ-помощника"
               >
-                <span aria-hidden="true">✨</span>
-                <span>ИИ</span>
+                <Sparkles className="size-4" strokeWidth={2} aria-hidden="true" />
+                <span>Помощник</span>
               </button>
             </Tooltip>
             <Tooltip tooltipContent="Оркестратор: цели, агенты, риски" position="bottom">
               <Link
                 to={`/${slugStr}/ai-orchestrator`}
-                className="flex h-8 items-center gap-1.5 rounded-md bg-layer-2 px-2.5 text-xs font-medium text-secondary transition-colors hover:bg-layer-2-hover"
+                className="flex h-8 items-center gap-1.5 rounded-md px-2 text-body-xs font-medium text-secondary transition-colors hover:bg-layer-2-hover hover:text-primary"
                 aria-label="Открыть ИИ-оркестратора"
               >
-                <span aria-hidden="true">🤖</span>
+                <Bot className="size-4" strokeWidth={2} aria-hidden="true" />
                 <span>Оркестратор</span>
               </Link>
             </Tooltip>

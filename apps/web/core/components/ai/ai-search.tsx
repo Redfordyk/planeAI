@@ -1,5 +1,5 @@
 /**
- * AISearch — full AI panel for the planeAI add-on.
+ * AISearch — full AI panel for the planeAI add-on (native Plane styling).
  *
  * Two modes via a toggle:
  *   - "Поиск"  — semantic Q&A over indexed work items / comments /
@@ -12,11 +12,37 @@
  * /api/ai/.../transcribe/ (useTranscribe), and drops the transcript
  * into the input — user reviews, edits, then presses Send.
  *
- * AISearchPanel at the bottom of this file is the slide-over wrapper
- * mounted from the top navigation.
+ * Visuals: zero emojis, lucide icons everywhere, all colors via
+ * Plane's semantic tokens (bg-layer-*, text-primary/secondary/tertiary,
+ * border-strong/subtle-1, accent-*, danger-*, warning-*, success-*).
+ * Buttons from @plane/propel.
  */
 
 import { useCallback, useMemo, useState } from "react";
+import {
+  AlertCircle,
+  ArrowRight,
+  ArrowUp,
+  Bot,
+  CheckCircle2,
+  Clock,
+  Eye,
+  FileText,
+  FolderKanban,
+  Hourglass,
+  Lightbulb,
+  ListChecks,
+  Loader2,
+  MessageSquare,
+  Mic,
+  Search,
+  Sparkles,
+  Square,
+  Target,
+  Wand2,
+  X,
+} from "lucide-react";
+import { Button } from "@plane/propel/button";
 
 import { useAIAgent, type AgentAction } from "../../hooks/ai/use-ai-agent";
 import { useAISearch, type SearchSource } from "../../hooks/ai/use-ai-search";
@@ -95,7 +121,7 @@ export function AISearch({
     mode === "search" ? searchErr : agentErr || transcribeErr || voice.error;
 
   return (
-    <div className={`flex h-full flex-col gap-4 px-5 py-5 ${className}`}>
+    <div className={`flex h-full flex-col gap-4 bg-layer-1 px-5 py-5 ${className}`}>
       <ModeToggle mode={mode} onChange={setMode} />
 
       {mode === "search" && (
@@ -138,32 +164,30 @@ export function AISearch({
   );
 }
 
-// --- mode toggle ----------------------------------------------------------
+// --- mode toggle ---------------------------------------------------------
 
-function ModeToggle({
-  mode,
-  onChange,
-}: {
-  mode: Mode;
-  onChange: (m: Mode) => void;
-}) {
-  const item = (val: Mode, label: string, icon: string, hint: string) => {
-    const active = mode === val;
+function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
+  const item = (val: Mode, label: string, Icon: typeof Search, hint: string) => {
+    const active = val === mode;
     return (
       <button
         type="button"
         onClick={() => onChange(val)}
-        className={`group flex-1 rounded-lg px-4 py-3 text-left transition-all ${
+        className={`group flex-1 rounded-md border px-3 py-2.5 text-left transition-colors ${
           active
-            ? "bg-custom-primary-100 text-white shadow-md"
-            : "bg-custom-background-90 text-custom-text-200 hover:bg-custom-background-80"
+            ? "border-accent-strong bg-accent-subtle text-accent-primary"
+            : "border-strong bg-layer-2 text-secondary hover:bg-layer-2-hover hover:text-primary"
         }`}
       >
-        <div className="flex items-center gap-2 text-sm font-semibold">
-          <span className="text-lg leading-none">{icon}</span>
+        <div className="flex items-center gap-2 text-body-sm font-semibold">
+          <Icon className="size-4" strokeWidth={2} />
           <span>{label}</span>
         </div>
-        <div className={`mt-0.5 text-[11px] leading-tight ${active ? "text-white/80" : "text-custom-text-300"}`}>
+        <div
+          className={`mt-0.5 text-caption-md leading-tight ${
+            active ? "text-accent-primary/80" : "text-tertiary"
+          }`}
+        >
           {hint}
         </div>
       </button>
@@ -171,8 +195,8 @@ function ModeToggle({
   };
   return (
     <div className="flex gap-2">
-      {item("search", "Поиск", "🔍", "Спросить по задачам")}
-      {item("agent", "Агент", "⚙️", "Создать проект/задачи")}
+      {item("search", "Поиск", Search, "Спросить по задачам")}
+      {item("agent", "Агент", Wand2, "Создать проект / задачи")}
     </div>
   );
 }
@@ -206,7 +230,7 @@ function Composer({
 }) {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-2">
-      <div className="relative flex items-stretch rounded-xl border border-custom-border-200 bg-custom-background-90 focus-within:border-custom-primary-100 focus-within:ring-2 focus-within:ring-custom-primary-100/20 transition-colors">
+      <div className="relative flex items-stretch rounded-md border border-strong bg-layer-2 transition-colors focus-within:border-accent-strong">
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -223,7 +247,7 @@ function Composer({
           }
           disabled={inputDisabled || voice.state !== "idle"}
           rows={2}
-          className="flex-1 resize-none bg-transparent px-4 py-3 text-sm leading-snug outline-none placeholder:text-custom-text-300 disabled:opacity-50"
+          className="flex-1 resize-none bg-transparent px-3 py-2.5 text-body-sm leading-snug text-primary outline-none placeholder:text-placeholder disabled:opacity-50"
         />
         <div className="flex items-end gap-1 px-2 pb-2">
           <MicButton
@@ -236,27 +260,37 @@ function Composer({
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-[11px] text-custom-text-300">
-        <span>
-          <kbd className="rounded border border-custom-border-200 px-1.5 py-0.5 font-mono">Enter</kbd>
-          {" "}— отправить, <kbd className="rounded border border-custom-border-200 px-1.5 py-0.5 font-mono">Shift+Enter</kbd> — перенос строки
+      <div className="flex items-center justify-between text-caption-md text-tertiary">
+        <span className="flex items-center gap-1.5">
+          <kbd className="rounded border border-strong bg-layer-2 px-1.5 py-0.5 font-mono text-caption-md">
+            Enter
+          </kbd>
+          <span>— отправить,</span>
+          <kbd className="rounded border border-strong bg-layer-2 px-1.5 py-0.5 font-mono text-caption-md">
+            Shift+Enter
+          </kbd>
+          <span>— перенос</span>
         </span>
         {isStreaming ? (
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="base"
             onClick={onCancel}
-            className="rounded-md bg-custom-background-80 px-3 py-1.5 text-xs font-medium hover:bg-custom-background-70"
+            type="button"
+            prependIcon={<Square />}
           >
-            ⏹ Стоп
-          </button>
+            Стоп
+          </Button>
         ) : (
-          <button
+          <Button
+            variant="primary"
+            size="base"
             type="submit"
             disabled={!canSubmit}
-            className="rounded-md bg-gradient-to-r from-custom-primary-100 to-custom-primary-200 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            appendIcon={<ArrowRight />}
           >
-            {mode === "search" ? "Спросить →" : "Выполнить →"}
-          </button>
+            {mode === "search" ? "Спросить" : "Выполнить"}
+          </Button>
         )}
       </div>
     </form>
@@ -282,6 +316,7 @@ function MicButton({
   const processing = state === "processing" || state === "requesting" || transcribing;
   const seconds = Math.floor(durationMs / 1000);
   const timer = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+
   const title = recording
     ? "Нажмите, чтобы остановить запись"
     : processing
@@ -295,9 +330,9 @@ function MicButton({
         onClick={onClick}
         title={title}
         aria-label={title}
-        className="flex h-9 items-center gap-1.5 rounded-md bg-red-500 px-3 text-xs font-mono text-white shadow-sm animate-pulse"
+        className="flex h-8 items-center gap-1.5 rounded-md bg-danger-primary px-2.5 text-caption-md font-mono text-on-color animate-pulse"
       >
-        <span className="h-2 w-2 rounded-full bg-white" />
+        <span className="size-2 rounded-full bg-on-color" />
         {timer}
       </button>
     );
@@ -309,9 +344,9 @@ function MicButton({
         disabled
         title={title}
         aria-label={title}
-        className="flex h-9 w-9 items-center justify-center rounded-md bg-custom-background-80 text-custom-text-300"
+        className="flex size-8 items-center justify-center rounded-md bg-layer-3 text-tertiary"
       >
-        <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-custom-text-300 border-t-transparent" />
+        <Loader2 className="size-3.5 animate-spin" />
       </button>
     );
   }
@@ -322,14 +357,9 @@ function MicButton({
       disabled={disabled}
       title={title}
       aria-label={title}
-      className="flex h-9 w-9 items-center justify-center rounded-md bg-custom-background-80 text-custom-text-200 hover:bg-custom-background-70 hover:text-custom-primary-100 disabled:opacity-40"
+      className="flex size-8 items-center justify-center rounded-md bg-layer-3 text-secondary transition-colors hover:bg-layer-3-hover hover:text-accent-primary disabled:opacity-40"
     >
-      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 1a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3Z"/>
-        <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
-        <line x1="12" y1="18" x2="12" y2="22"/>
-        <line x1="8" y1="22" x2="16" y2="22"/>
-      </svg>
+      <Mic className="size-4" strokeWidth={2} />
     </button>
   );
 }
@@ -345,7 +375,8 @@ function IndexBanner({
 }) {
   if (loading && !index) {
     return (
-      <div className="rounded-lg bg-custom-background-90 px-3 py-2 text-xs text-custom-text-300">
+      <div className="flex items-center gap-2 rounded-md border border-subtle-1 bg-layer-2 px-3 py-2 text-caption-md text-tertiary">
+        <Loader2 className="size-3.5 animate-spin" />
         Загрузка статуса индексации…
       </div>
     );
@@ -353,27 +384,34 @@ function IndexBanner({
   if (!index) return null;
   if (index.total === 0) {
     return (
-      <div className="rounded-lg border border-custom-border-100 bg-custom-background-90 px-3 py-2 text-xs text-custom-text-300">
-        В воркспейсе пока нет задач для индексации. Поиск заработает после первой задачи.
+      <div className="flex items-center gap-2 rounded-md border border-subtle-1 bg-layer-2 px-3 py-2 text-caption-md text-tertiary">
+        <FileText className="size-3.5" />
+        В воркспейсе пока нет задач для индексации.
       </div>
     );
   }
   if (index.ready) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-700 dark:border-green-900 dark:bg-green-950 dark:text-green-300">
-        <span>✓</span>
-        <span>Индекс готов: {index.indexed} из {index.total} ({Math.round(index.coverage * 100)}%)</span>
+      <div className="flex items-center gap-2 rounded-md border border-success-strong bg-success-subtle-1 px-3 py-2 text-caption-md text-success-primary">
+        <CheckCircle2 className="size-3.5" strokeWidth={2} />
+        Индекс готов: {index.indexed} из {index.total} ({Math.round(index.coverage * 100)}%)
       </div>
     );
   }
   return (
-    <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-3 py-2 text-xs text-yellow-800 dark:border-yellow-900 dark:bg-yellow-950 dark:text-yellow-200">
+    <div className="rounded-md border border-warning-strong bg-warning-subtle px-3 py-2 text-caption-md text-warning-primary">
       <div className="mb-1 flex items-center justify-between">
-        <span>⏳ Индексация: {index.indexed}/{index.total} ({Math.round(index.coverage * 100)}%)</span>
-        <span className="text-[10px] opacity-70">Поиск временно выключен</span>
+        <span className="flex items-center gap-1.5">
+          <Hourglass className="size-3.5" />
+          Индексация: {index.indexed}/{index.total} ({Math.round(index.coverage * 100)}%)
+        </span>
+        <span className="text-caption-sm opacity-70">Поиск временно выключен</span>
       </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-yellow-100 dark:bg-yellow-900">
-        <div className="h-full bg-yellow-500 transition-all" style={{ width: `${index.coverage * 100}%` }} />
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-warning-subtle-hover">
+        <div
+          className="h-full bg-warning-primary transition-all"
+          style={{ width: `${index.coverage * 100}%` }}
+        />
       </div>
     </div>
   );
@@ -381,8 +419,8 @@ function IndexBanner({
 
 function ErrorBanner({ message }: { message: string }) {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
-      <span aria-hidden="true">⚠️</span>
+    <div className="flex items-start gap-2 rounded-md border border-danger-strong bg-danger-subtle px-3 py-2 text-body-sm text-danger-primary">
+      <AlertCircle className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
       <span className="flex-1">{message}</span>
     </div>
   );
@@ -406,10 +444,10 @@ function AnswerPanel({
   }
   return (
     <div className="flex flex-col gap-4 md:grid md:grid-cols-[1fr_220px] md:gap-4">
-      <article className="prose prose-sm max-w-none rounded-xl border border-custom-border-200 bg-custom-background-90 p-4 text-sm leading-relaxed">
+      <article className="prose prose-sm max-w-none rounded-md border border-strong bg-layer-2 p-4 text-body-sm leading-relaxed text-primary">
         <RenderedAnswer text={answer} />
         {status === "streaming" && (
-          <span className="ml-1 inline-block h-3 w-2 animate-pulse bg-custom-text-300 align-middle" />
+          <span className="ml-1 inline-block h-3 w-2 animate-pulse bg-tertiary align-middle" />
         )}
       </article>
       <SourcesSidebar sources={sources} workspaceSlug={workspaceSlug} />
@@ -420,20 +458,24 @@ function AnswerPanel({
 function EmptyState({ mode }: { mode: Mode }) {
   if (mode === "search") {
     return (
-      <div className="rounded-xl border border-dashed border-custom-border-200 bg-custom-background-90 px-4 py-8 text-center">
-        <div className="text-3xl">💡</div>
-        <div className="mt-2 text-sm font-medium text-custom-text-200">Спросите что-нибудь по проекту</div>
-        <div className="mt-1 text-xs text-custom-text-300">
+      <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-strong bg-layer-2 px-4 py-8 text-center">
+        <Lightbulb className="size-6 text-tertiary" strokeWidth={1.75} />
+        <div className="text-body-sm font-medium text-secondary">
+          Спросите что-нибудь по проекту
+        </div>
+        <div className="text-body-xs text-tertiary">
           Например: «что известно про новый релиз?», «какие задачи у Ильи?»
         </div>
       </div>
     );
   }
   return (
-    <div className="rounded-xl border border-dashed border-custom-border-200 bg-custom-background-90 px-4 py-8 text-center">
-      <div className="text-3xl">✨</div>
-      <div className="mt-2 text-sm font-medium text-custom-text-200">ИИ-агент создаст проект и задачи</div>
-      <div className="mt-1 text-xs text-custom-text-300">
+    <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-strong bg-layer-2 px-4 py-8 text-center">
+      <Sparkles className="size-6 text-accent-primary" strokeWidth={1.75} />
+      <div className="text-body-sm font-medium text-secondary">
+        ИИ-агент создаст проект и задачи
+      </div>
+      <div className="text-body-xs text-tertiary">
         Например: «создай проект „Маркетинг“ и в нём задачи: лендинг, тексты, аналитика. Назначь Илью».
       </div>
     </div>
@@ -443,14 +485,14 @@ function EmptyState({ mode }: { mode: Mode }) {
 function SourcesSidebar({ sources, workspaceSlug }: { sources: SearchSource[]; workspaceSlug: string }) {
   if (!sources.length) {
     return (
-      <aside className="rounded-xl border border-dashed border-custom-border-200 bg-custom-background-90 p-3 text-xs text-custom-text-300">
+      <aside className="rounded-md border border-dashed border-strong bg-layer-2 p-3 text-body-xs text-tertiary">
         Источники появятся здесь
       </aside>
     );
   }
   return (
-    <aside className="rounded-xl border border-custom-border-200 bg-custom-background-90 p-3 text-xs">
-      <div className="mb-2 font-semibold text-custom-text-200">Источники</div>
+    <aside className="rounded-md border border-strong bg-layer-2 p-3 text-body-xs">
+      <div className="mb-2 font-semibold text-secondary">Источники</div>
       <ul className="flex flex-col gap-1.5">
         {sources.map((s) => (
           <li key={`${s.source_type}:${s.source_id}`}>
@@ -462,16 +504,29 @@ function SourcesSidebar({ sources, workspaceSlug }: { sources: SearchSource[]; w
   );
 }
 
-function sourceLabel(s: SearchSource): string {
+function sourceIcon(source_type: string): typeof Target {
+  switch (source_type) {
+    case "work_item":
+      return Target;
+    case "comment":
+      return MessageSquare;
+    case "page":
+      return FileText;
+    default:
+      return FileText;
+  }
+}
+
+function sourceLabel(s: SearchSource): { Icon: typeof Target; label: string; suffix: string } {
   switch (s.source_type) {
     case "work_item":
-      return `🎯 Задача · ${s.source_id.slice(0, 8)}`;
+      return { Icon: Target, label: "Задача", suffix: s.source_id.slice(0, 8) };
     case "comment":
-      return `💬 Комментарий · ${s.source_id.slice(0, 8)}`;
+      return { Icon: MessageSquare, label: "Комментарий", suffix: s.source_id.slice(0, 8) };
     case "page":
-      return `📄 Страница · ${s.source_id.slice(0, 8)}`;
+      return { Icon: FileText, label: "Страница", suffix: s.source_id.slice(0, 8) };
     default:
-      return s.source_id.slice(0, 8);
+      return { Icon: FileText, label: "Источник", suffix: s.source_id.slice(0, 8) };
   }
 }
 
@@ -486,10 +541,26 @@ function sourceHref(s: SearchSource, workspaceSlug: string): string | null {
 
 function SourceLink({ source, workspaceSlug }: { source: SearchSource; workspaceSlug: string }) {
   const href = sourceHref(source, workspaceSlug);
-  if (!href) return <span className="text-custom-text-300">{sourceLabel(source)}</span>;
+  const { Icon, label, suffix } = sourceLabel(source);
+  const inner = (
+    <span className="flex items-center gap-1.5">
+      <Icon className="size-3 shrink-0 text-tertiary" strokeWidth={2} />
+      <span className="text-secondary">{label}</span>
+      <span className="font-mono text-tertiary">·</span>
+      <span className="font-mono text-tertiary">{suffix}</span>
+    </span>
+  );
+  if (!href) {
+    return <span className="block px-1.5 py-1">{inner}</span>;
+  }
   return (
-    <a href={href} className="block rounded px-1.5 py-1 text-custom-primary-100 hover:bg-custom-background-80 hover:underline" target="_blank" rel="noreferrer">
-      {sourceLabel(source)}
+    <a
+      href={href}
+      className="block rounded px-1.5 py-1 text-accent-primary hover:bg-layer-3 hover:underline"
+      target="_blank"
+      rel="noreferrer"
+    >
+      {inner}
     </a>
   );
 }
@@ -507,9 +578,11 @@ function AgentPanel({
 }) {
   if (loading) {
     return (
-      <div className="flex items-center gap-3 rounded-xl border border-custom-border-200 bg-custom-background-90 px-4 py-6 text-sm">
-        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-custom-primary-100 border-t-transparent" />
-        <span className="text-custom-text-200">⚙️ Агент работает… выполняет шаги, создаёт проекты и задачи.</span>
+      <div className="flex items-center gap-3 rounded-md border border-strong bg-layer-2 px-4 py-5 text-body-sm">
+        <Loader2 className="size-4 animate-spin text-accent-primary" strokeWidth={2} />
+        <span className="text-secondary">
+          Агент работает — выполняет шаги, создаёт проекты и задачи…
+        </span>
       </div>
     );
   }
@@ -518,16 +591,22 @@ function AgentPanel({
   }
   return (
     <div className="flex flex-col gap-3">
-      <article className="rounded-xl border border-custom-border-200 bg-custom-background-90 p-4 text-sm leading-relaxed whitespace-pre-wrap">
+      <article className="rounded-md border border-strong bg-layer-2 p-4 text-body-sm leading-relaxed text-primary whitespace-pre-wrap">
         {result.reply}
       </article>
       {result.actions.length > 0 && (
         <details
-          className="rounded-xl border border-custom-border-200 bg-custom-background-90 p-3 text-xs"
+          className="rounded-md border border-strong bg-layer-2 p-3 text-body-xs"
           open
         >
-          <summary className="cursor-pointer text-custom-text-200 select-none">
-            <span className="font-semibold">Действия</span> · {result.actions.length} вызов{plural(result.actions.length, "", "а", "ов")} · {result.turns} шаг{plural(result.turns, "", "а", "ов")} · ${result.total_cost_usd}
+          <summary className="flex cursor-pointer items-center gap-1.5 select-none text-secondary">
+            <ListChecks className="size-3.5 text-tertiary" strokeWidth={2} />
+            <span className="font-semibold">Действия</span>
+            <span className="text-tertiary">
+              · {result.actions.length} вызов{plural(result.actions.length, "", "а", "ов")}
+              · {result.turns} шаг{plural(result.turns, "", "а", "ов")}
+              · ${result.total_cost_usd}
+            </span>
           </summary>
           <ul className="mt-2 flex flex-col gap-1.5">
             {result.actions.map((a, i) => (
@@ -552,39 +631,57 @@ function plural(n: number, one: string, few: string, many: string): string {
 function ActionLine({ action, workspaceSlug }: { action: AgentAction; workspaceSlug: string }) {
   const ok = action.ok;
   const result = action.result as Record<string, unknown>;
+  let Icon: typeof Target = Target;
   let summary = "";
   let href: string | null = null;
+  let tone: "ok" | "warn" = ok ? "ok" : "warn";
 
   if (action.tool === "create_project" && ok) {
     const reused = result["reused"] === true;
-    summary = `📁 ${reused ? "Использован существующий" : "Создан"} проект «${result["name"]}» (${result["identifier"]})`;
+    Icon = FolderKanban;
+    summary = `${reused ? "Использован существующий" : "Создан"} проект «${result["name"]}» (${result["identifier"]})`;
     href = `/${workspaceSlug}/projects/${result["project_id"]}/issues/`;
   } else if (action.tool === "create_issue" && ok) {
     const priority = result["priority"];
-    summary = `✅ Задача «${result["name"]}»${priority && priority !== "none" ? ` · ${priority}` : ""}`;
+    Icon = CheckCircle2;
+    summary = `Задача «${result["name"]}»${
+      priority && priority !== "none" ? ` · ${priority}` : ""
+    }`;
     href = result["project_id"] && result["issue_id"]
       ? `/${workspaceSlug}/projects/${result["project_id"]}/issues/${result["issue_id"]}`
       : null;
   } else if (action.tool === "list_projects" && ok) {
     const ps = (result["projects"] as unknown[]) ?? [];
-    summary = `👁 Список проектов (${ps.length})`;
+    Icon = Eye;
+    summary = `Список проектов (${ps.length})`;
   } else if (action.tool === "list_members" && ok) {
     const ms = (result["members"] as unknown[]) ?? [];
-    summary = `👁 Список участников (${ms.length})`;
+    Icon = Eye;
+    summary = `Список участников (${ms.length})`;
   } else if (!ok) {
-    summary = `⚠️ ${action.tool}: ${String(result["error"] ?? "ошибка")}`;
+    Icon = AlertCircle;
+    summary = `${action.tool}: ${String(result["error"] ?? "ошибка")}`;
+    tone = "warn";
   } else {
-    summary = `• ${action.tool}`;
+    summary = action.tool;
   }
 
+  const toneClass = tone === "ok" ? "text-secondary" : "text-warning-primary";
+  const inner = (
+    <span className="flex items-start gap-1.5">
+      <Icon className={`mt-0.5 size-3.5 shrink-0 ${tone === "ok" ? "text-tertiary" : "text-warning-primary"}`} strokeWidth={2} />
+      <span>{summary}</span>
+    </span>
+  );
+
   return (
-    <li className={ok ? "text-custom-text-200" : "text-yellow-700 dark:text-yellow-300"}>
+    <li className={toneClass}>
       {href ? (
         <a href={href} className="hover:underline" target="_blank" rel="noreferrer">
-          {summary}
+          {inner}
         </a>
       ) : (
-        summary
+        inner
       )}
     </li>
   );
@@ -612,7 +709,7 @@ function RenderedAnswer({ text }: { text: string }) {
     <>
       {segments.map((seg, i) =>
         seg.kind === "code" ? (
-          <pre key={i} className="overflow-x-auto rounded bg-custom-background-80 p-2 text-xs">
+          <pre key={i} className="overflow-x-auto rounded-md border border-subtle-1 bg-layer-3 p-2 text-body-xs">
             <code>{seg.value}</code>
           </pre>
         ) : (
@@ -641,7 +738,7 @@ function ProseSegment({ text }: { text: string }) {
         ) : (
           <span
             key={i}
-            className="rounded bg-custom-background-80 px-1.5 py-0.5 text-[11px] font-mono text-custom-text-300"
+            className="rounded bg-layer-3 px-1.5 py-0.5 text-caption-md font-mono text-tertiary"
             title="Источник в правой колонке"
           >
             {p.raw}
@@ -668,30 +765,29 @@ export function AISearchPanel({
   if (!open) return null;
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex justify-end bg-overlay backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex h-full w-full max-w-2xl flex-col bg-custom-background-100 shadow-2xl">
-        <header className="flex items-center justify-between border-b border-custom-border-200 px-5 py-3">
-          <div className="flex items-center gap-2">
-            <span className="text-lg">✨</span>
+      <div className="flex h-full w-full max-w-2xl flex-col bg-layer-1 shadow-2xl">
+        <header className="flex items-center justify-between border-b border-subtle-1 bg-layer-1 px-5 py-3">
+          <div className="flex items-center gap-2.5">
+            <div className="flex size-8 items-center justify-center rounded-md bg-accent-subtle text-accent-primary">
+              <Sparkles className="size-4" strokeWidth={2} />
+            </div>
             <div>
-              <div className="text-sm font-semibold text-custom-text-100">ИИ-помощник</div>
-              <div className="text-[11px] text-custom-text-300">DeepSeek + OpenAI embeddings</div>
+              <div className="text-body-sm font-semibold text-primary">ИИ-помощник</div>
+              <div className="text-caption-md text-tertiary">DeepSeek · OpenAI embeddings</div>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1.5 text-custom-text-300 hover:bg-custom-background-80 hover:text-custom-text-100"
+            className="flex size-8 items-center justify-center rounded-md text-tertiary transition-colors hover:bg-layer-2-hover hover:text-primary"
             aria-label="Закрыть"
           >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
+            <X className="size-4" strokeWidth={2} />
           </button>
         </header>
         <div className="flex-1 min-h-0 overflow-hidden">
