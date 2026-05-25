@@ -536,10 +536,17 @@ function sourceLabel(s: SearchSource): { Icon: typeof Target; label: string; suf
 
 function sourceHref(s: SearchSource, workspaceSlug: string): string | null {
   if (s.source_type === "work_item") {
-    return `/${workspaceSlug}/projects/${s.project_id ?? ""}/issues/${s.source_id}`;
+    // /browse/ route doesn't require project_id and always resolves.
+    return `/${workspaceSlug}/browse/${s.source_id}`;
   }
   if (s.source_type === "comment") return null;
-  if (s.source_type === "page") return `/${workspaceSlug}/pages/${s.source_id}`;
+  if (s.source_type === "page") {
+    // Plane has only one page route — `/<ws>/projects/<pid>/pages/<id>`.
+    // Backend backfills project_id via ProjectPage; if it couldn't, we
+    // can't build a working URL, so render plain text instead.
+    if (!s.project_id) return null;
+    return `/${workspaceSlug}/projects/${s.project_id}/pages/${s.source_id}`;
+  }
   return null;
 }
 

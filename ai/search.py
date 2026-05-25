@@ -173,9 +173,16 @@ def source_ids(chunks: list[RetrievedChunk]) -> list[dict]:
     """Distinct source pointers (one entry per source_id) preserving
     the order chunks appeared in retrieval. Suitable for "sources"
     sidebar in the UI.
+
+    For SOURCE_PAGE chunks `project_id` is NULL (pages live at workspace
+    level, see DocumentChunk model docstring). The UI needs project_id
+    to build a deep link — Plane's only page route is
+    `/<ws>/projects/<pid>/pages/<page_id>`. We backfill it here via the
+    ``db.ProjectPage`` junction (one query batched by source_id).
     """
     seen: set[tuple[str, str]] = set()
     result: list[dict] = []
+    page_ids: list[str] = []
     for c in chunks:
         key = (c.source_type, c.source_id)
         if key in seen:
@@ -188,4 +195,25 @@ def source_ids(chunks: list[RetrievedChunk]) -> list[dict]:
                 "project_id": c.project_id,
             }
         )
+        if c.source_type == "page" and not c.project_id:
+            page_ids.append(c.source_id)
+
+    if page_ids:
+        # Resolve first project for each page via ProjectPage join.
+        try:
+            from django.apps import apps
+            ProjectPage = apps.get_model("db", "ProjectPage")
+            mapping: dict[str, str] = {}
+            for row in ProjectPage.objects.filter(page_id__in=page_ids).values(
+                "page_id", "project_id"
+            ):
+                pid = str(row["page_id"])
+                if pid not in mapping:
+                    mapping[pid] = str(row["project_id"])
+            for entry in result:
+                if entry["source_type"] == "page" and not entry["project_id"]:
+                    entry["project_id"] = mapping.get(entry["source_id"])
+        except Exception:  # noqa: BLE001 — never fail the search response
+            pass
+
     return result
