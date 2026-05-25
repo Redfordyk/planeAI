@@ -239,6 +239,50 @@ def planner_decompose_goal(self, goal_id: str) -> dict:
     }
 
 
+@shared_task(name="ai.orchestrator_tick_all_workspaces")
+def orchestrator_tick_all_workspaces(scan_only: bool = False) -> dict:
+    """Periodic dispatcher run from Celery Beat.
+
+    For every workspace with AI enabled (and kill-switch off):
+
+      - GOAL_SCAN event per active goal's project — drives MONITOR.
+      - WEEKLY_TICK once per workspace (if scan_only=False) — drives
+        COMMUNICATOR + ANALYST. Caller pins WEEKLY_TICK to Fridays
+        via the beat-schedule cron.
+
+    Each event goes through the standard handle_event path so the
+    breaker + dedupe + lock all apply uniformly.
+    """
+    from ai.models import ProjectGoal, WorkspaceAIConfig
+    from ai.orchestrator.events import Event, GOAL_SCAN, WEEKLY_TICK
+
+    cfgs = WorkspaceAIConfig.objects.filter(enabled=True, agents_killed=False)
+    fired = 0
+    for cfg in cfgs:
+        active_goals = ProjectGoal.objects.filter(
+            workspace_id=cfg.workspace_id,
+            status__in=(ProjectGoal.STATUS_EXECUTING, ProjectGoal.STATUS_AT_RISK),
+        ).only("id", "project_id")
+        for goal in active_goals:
+            if not goal.project_id:
+                continue
+            ev = Event(
+                type=GOAL_SCAN,
+                workspace_id=str(cfg.workspace_id),
+                project_id=str(goal.project_id),
+                goal_id=str(goal.id),
+            )
+            orchestrator_handle_event.apply_async(args=[ev.to_dict()])
+            fired += 1
+        if not scan_only:
+            ev = Event(
+                type=WEEKLY_TICK, workspace_id=str(cfg.workspace_id),
+            )
+            orchestrator_handle_event.apply_async(args=[ev.to_dict()])
+            fired += 1
+    return {"workspaces": cfgs.count(), "events_fired": fired}
+
+
 @shared_task(name="ai.delete_chunks")
 def delete_chunks(source_type: str, source_id: str) -> int:
     """Remove all chunks for a deleted source object.
