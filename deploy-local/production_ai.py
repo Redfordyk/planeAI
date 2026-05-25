@@ -27,3 +27,10 @@ FIELD_ENCRYPTION_KEY = os.environ.get("FIELD_ENCRYPTION_KEY", "")
 # startup-time retries by default. Silence the noisy warning while
 # preserving the current "retry on startup" behaviour we want.
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+
+# planeAI: allow any password during sign-up / password-change.
+# Disables Django's built-in checks (8-char min, common-password
+# blocklist, numeric-only blocklist, similar-to-attribute). The
+# remaining strength check (zxcvbn score >= 3) lives inside Plane's
+# auth adapter; we neutralise it in ai-runtime/permissive_password.py.
+AUTH_PASSWORD_VALIDATORS = []
