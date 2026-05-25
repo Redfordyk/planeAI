@@ -1,22 +1,41 @@
 /**
- * Multi-Agent Orchestrator UI (TZ 12.1).
+ * Multi-Agent Orchestrator UI (TZ 12.1) — native Plane styling.
  *
- * One page with three panes, all in Plane's design tokens:
+ * All visuals use Plane's design system:
+ *   - components: @plane/propel Card / Button / Badge / Input
+ *   - semantic tokens: bg-layer-1/2/3, text-primary/secondary/tertiary,
+ *     border-strong/subtle, accent-*, danger-*, warning-*, success-*
+ *   - icons: lucide-react (the same as everywhere in Plane)
  *
- *   1. Goals     — create + browse, with PLANNER preview + Apply.
- *   2. Activity  — live AgentAction feed (chronological).
- *   3. Risks     — open PredictedRisk rows with Resolve.
- *
- * Plus a kill-switch button in the header (admin-only).
- *
- * All colors via custom-* utilities (background-100/text-200/border-200/etc).
- * No hardcoded hex. Renders inside the same providers as the rest of
- * Plane so dark/light/high-contrast all come for free.
+ * No hex literals, no bg-custom-* utility classes — only semantic
+ * tokens so light/dark/high-contrast all work for free.
  */
 
 "use client";
 
 import React, { useState } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  Calendar,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  ListChecks,
+  Pause,
+  PlayCircle,
+  Plus,
+  ShieldAlert,
+  Sparkles,
+  Target,
+  X,
+} from "lucide-react";
+import { Badge } from "@plane/propel/badge";
+import { Button } from "@plane/propel/button";
+import { Card, ECardSpacing, ECardVariant } from "@plane/propel/card";
+import { Input } from "@plane/propel/input";
+import { Spinner } from "@plane/propel/spinners";
 import {
   useActivityFeed,
   useApplyPlan,
@@ -34,28 +53,37 @@ type Props = {
   workspaceSlug: string;
 };
 
-const AGENT_COLORS: Record<string, string> = {
-  PLANNER: "bg-blue-500/10 text-blue-500",
-  MONITOR: "bg-orange-500/10 text-orange-500",
-  EXECUTOR: "bg-green-500/10 text-green-500",
-  ESCALATOR: "bg-red-500/10 text-red-500",
-  ANALYST: "bg-purple-500/10 text-purple-500",
-  COMMUNICATOR: "bg-teal-500/10 text-teal-500",
-  ORCHESTRATOR: "bg-custom-primary-100/10 text-custom-primary-100",
+const AGENT_VARIANT: Record<string, "neutral" | "brand" | "warning" | "success" | "danger"> = {
+  PLANNER: "brand",
+  MONITOR: "warning",
+  EXECUTOR: "success",
+  ESCALATOR: "danger",
+  ANALYST: "brand",
+  COMMUNICATOR: "neutral",
+  ORCHESTRATOR: "brand",
 };
 
-const RISK_LEVEL_BG: Record<string, string> = {
-  AUTO: "bg-green-500/10 text-green-500",
-  NOTIFY: "bg-yellow-500/10 text-yellow-500",
-  CONFIRM: "bg-orange-500/10 text-orange-500",
-  ESCALATE: "bg-red-500/10 text-red-500",
+const RISK_BADGE: Record<string, "neutral" | "brand" | "warning" | "success" | "danger"> = {
+  AUTO: "success",
+  NOTIFY: "warning",
+  CONFIRM: "warning",
+  ESCALATE: "danger",
 };
 
-const IMPACT_BG: Record<string, string> = {
-  low: "bg-custom-background-90 text-custom-text-300",
-  medium: "bg-yellow-500/10 text-yellow-600",
-  high: "bg-orange-500/10 text-orange-600",
-  critical: "bg-red-500/10 text-red-500",
+const IMPACT_BADGE: Record<string, "neutral" | "warning" | "danger"> = {
+  low: "neutral",
+  medium: "neutral",
+  high: "warning",
+  critical: "danger",
+};
+
+const STATUS_BADGE: Record<string, "neutral" | "brand" | "warning" | "success" | "danger"> = {
+  draft: "neutral",
+  planning: "brand",
+  executing: "success",
+  at_risk: "warning",
+  blocked: "danger",
+  done: "neutral",
 };
 
 export const OrchestratorPage: React.FC<Props> = ({ workspaceId }) => {
@@ -65,20 +93,11 @@ export const OrchestratorPage: React.FC<Props> = ({ workspaceId }) => {
   const { engaged, flip } = useKillSwitch(workspaceId);
 
   return (
-    <div className="flex h-full w-full flex-col gap-4 p-6 text-custom-text-100">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">🤖 ИИ-оркестратор</h1>
-          <p className="text-xs text-custom-text-300">
-            Цели · агенты · риски — система ведёт проект к результату.
-          </p>
-        </div>
-        <KillSwitchButton engaged={engaged} onFlip={flip} />
-      </div>
+    <div className="flex h-full w-full flex-col gap-5 bg-layer-1 p-6 text-primary">
+      <PageHeader engaged={engaged} onFlip={flip} />
 
-      <div className="grid flex-1 grid-cols-1 gap-4 overflow-hidden lg:grid-cols-[2fr_1fr]">
-        {/* Left column: Goals */}
+      <div className="grid flex-1 grid-cols-1 gap-5 overflow-hidden lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        {/* Left column — Goals */}
         <div className="flex min-h-0 flex-col gap-3 overflow-hidden">
           <GoalCreator
             workspaceId={workspaceId}
@@ -99,7 +118,7 @@ export const OrchestratorPage: React.FC<Props> = ({ workspaceId }) => {
           />
         </div>
 
-        {/* Right column: Risks + Activity feed */}
+        {/* Right column — Risks + Activity */}
         <div className="flex min-h-0 flex-col gap-3 overflow-hidden">
           <RiskPanel risks={risks} onResolve={resolve} />
           <ActivityPanel actions={actions} />
@@ -109,28 +128,36 @@ export const OrchestratorPage: React.FC<Props> = ({ workspaceId }) => {
   );
 };
 
-// ---- Kill switch -----------------------------------------------------
+// ---- Header ----------------------------------------------------------
 
-const KillSwitchButton: React.FC<{ engaged: boolean | null; onFlip: (n: boolean) => Promise<any> }> = ({
+const PageHeader: React.FC<{ engaged: boolean | null; onFlip: (n: boolean) => Promise<any> }> = ({
   engaged,
   onFlip,
-}) => {
-  if (engaged === null) return null;
-  return (
-    <button
-      type="button"
-      onClick={() => onFlip(!engaged)}
-      className={`flex items-center gap-2 rounded-md border border-custom-border-200 px-3 py-1.5 text-xs font-medium transition-colors ${
-        engaged
-          ? "bg-red-500/10 text-red-500 hover:bg-red-500/20"
-          : "bg-custom-background-90 text-custom-text-200 hover:bg-custom-background-80"
-      }`}
-    >
-      <span>{engaged ? "🛑" : "⏸️"}</span>
-      <span>{engaged ? "Агенты остановлены" : "Пауза агентов"}</span>
-    </button>
-  );
-};
+}) => (
+  <header className="flex items-start justify-between gap-4">
+    <div className="flex items-start gap-3">
+      <div className="flex size-10 items-center justify-center rounded-md bg-accent-subtle text-accent-primary">
+        <Sparkles className="size-5" strokeWidth={2} />
+      </div>
+      <div>
+        <h1 className="text-heading-md font-semibold text-primary">ИИ-оркестратор</h1>
+        <p className="text-body-sm text-tertiary">
+          Цели · агенты · риски — система ведёт проект к результату.
+        </p>
+      </div>
+    </div>
+    {engaged !== null && (
+      <Button
+        variant={engaged ? "error-outline" : "secondary"}
+        size="lg"
+        onClick={() => onFlip(!engaged)}
+        prependIcon={engaged ? <ShieldAlert /> : <Pause />}
+      >
+        {engaged ? "Агенты остановлены" : "Пауза агентов"}
+      </Button>
+    )}
+  </header>
+);
 
 // ---- Goal creator ----------------------------------------------------
 
@@ -166,60 +193,69 @@ const GoalCreator: React.FC<{ workspaceId: string; onCreated: () => void }> = ({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex items-center justify-center gap-2 rounded-md border border-dashed border-custom-border-300 bg-custom-background-90 px-4 py-3 text-sm font-medium text-custom-text-200 hover:bg-custom-background-80 hover:text-custom-text-100"
+        className="flex items-center justify-center gap-2 rounded-md border border-dashed border-strong bg-layer-2 px-4 py-3 text-body-sm text-secondary transition-colors hover:border-accent-primary hover:bg-accent-subtle hover:text-accent-primary"
       >
-        <span>✨</span>
-        <span>Поставить цель — PLANNER декомпозирует</span>
+        <Plus className="size-4" />
+        Поставить цель — PLANNER декомпозирует
       </button>
     );
   }
 
   return (
-    <form
-      onSubmit={submit}
-      className="rounded-md border border-custom-border-200 bg-custom-background-100 p-4 shadow-sm"
-    >
-      <input
-        autoFocus
-        required
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Например: Запустить мобильное приложение к 1 июня"
-        className="w-full rounded-md border border-custom-border-200 bg-custom-background-90 px-3 py-2 text-sm text-custom-text-100 placeholder:text-custom-text-400 focus:border-custom-primary-100 focus:outline-none"
-      />
-      <textarea
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        placeholder="Описание (команда, бюджет, контекст) — опционально"
-        rows={2}
-        className="mt-2 w-full rounded-md border border-custom-border-200 bg-custom-background-90 px-3 py-2 text-sm text-custom-text-100 placeholder:text-custom-text-400 focus:border-custom-primary-100 focus:outline-none"
-      />
-      <div className="mt-2 flex items-center gap-2">
-        <input
-          type="date"
-          value={deadline}
-          onChange={(e) => setDeadline(e.target.value)}
-          className="rounded-md border border-custom-border-200 bg-custom-background-90 px-3 py-2 text-sm text-custom-text-100"
+    <Card variant={ECardVariant.WITHOUT_SHADOW} spacing={ECardSpacing.LG}>
+      <form onSubmit={submit} className="flex flex-col gap-3">
+        <div className="flex items-center gap-2 text-body-sm font-medium text-primary">
+          <Target className="size-4 text-accent-primary" />
+          Новая цель
+        </div>
+        <Input
+          autoFocus
+          required
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Запустить мобильное приложение к 1 июня"
+          className="w-full"
         />
-        <span className="text-xs text-custom-text-400">Дедлайн</span>
-        <div className="flex-1" />
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="rounded-md px-3 py-1.5 text-xs text-custom-text-300 hover:text-custom-text-100"
-        >
-          Отмена
-        </button>
-        <button
-          type="submit"
-          disabled={busy || !title.trim()}
-          className="rounded-md bg-custom-primary-100 px-3 py-1.5 text-xs font-medium text-white hover:bg-custom-primary-200 disabled:opacity-50"
-        >
-          {busy ? "PLANNER думает..." : "Сгенерировать план"}
-        </button>
-      </div>
-      {err && <p className="mt-2 text-xs text-red-500">{err}</p>}
-    </form>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Контекст: команда, бюджет, ограничения — опционально"
+          rows={2}
+          className="w-full rounded-md border border-strong bg-layer-2 px-3 py-2 text-body-sm text-primary placeholder:text-placeholder focus:border-accent-strong focus:outline-none"
+        />
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 rounded-md border border-strong bg-layer-2 px-2 py-1.5">
+            <Calendar className="size-3.5 text-tertiary" />
+            <input
+              type="date"
+              value={deadline}
+              onChange={(e) => setDeadline(e.target.value)}
+              className="bg-transparent text-body-xs text-primary outline-none"
+            />
+          </div>
+          <div className="flex-1" />
+          <Button variant="ghost" size="lg" onClick={() => setOpen(false)} type="button">
+            Отмена
+          </Button>
+          <Button
+            variant="primary"
+            size="lg"
+            type="submit"
+            disabled={busy || !title.trim()}
+            loading={busy}
+            prependIcon={<Sparkles />}
+          >
+            {busy ? "PLANNER думает…" : "Сгенерировать план"}
+          </Button>
+        </div>
+        {err && (
+          <div className="flex items-center gap-1.5 text-body-xs text-danger-primary">
+            <AlertTriangle className="size-3.5" />
+            {err}
+          </div>
+        )}
+      </form>
+    </Card>
   );
 };
 
@@ -231,13 +267,29 @@ const GoalList: React.FC<{
   workspaceId: string;
   onApplied: () => void;
 }> = ({ goals, loading, workspaceId, onApplied }) => {
-  if (loading && !goals) return <Loader text="Загружаю цели..." />;
-  if (!goals || goals.length === 0)
+  if (loading && !goals) {
     return (
-      <div className="rounded-md border border-custom-border-200 bg-custom-background-100 p-4 text-sm text-custom-text-300">
-        Пока нет ни одной цели. Поставь первую — система соберёт план.
-      </div>
+      <Card variant={ECardVariant.WITHOUT_SHADOW} spacing={ECardSpacing.LG}>
+        <div className="flex items-center justify-center gap-2 py-6 text-body-sm text-tertiary">
+          <Spinner className="size-4" />
+          Загружаю цели…
+        </div>
+      </Card>
     );
+  }
+  if (!goals || goals.length === 0) {
+    return (
+      <Card variant={ECardVariant.WITHOUT_SHADOW} spacing={ECardSpacing.LG}>
+        <div className="flex flex-col items-center justify-center gap-2 py-8 text-center">
+          <Target className="size-8 text-tertiary" />
+          <p className="text-body-sm font-medium text-secondary">Целей пока нет</p>
+          <p className="text-body-xs text-tertiary">
+            Поставь первую — система соберёт план задач.
+          </p>
+        </div>
+      </Card>
+    );
+  }
   return (
     <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
       {goals.map((g) => (
@@ -263,76 +315,88 @@ const GoalCard: React.FC<{ goal: Goal; workspaceId: string; onApplied: () => voi
     if (r.ok) onApplied();
   };
   return (
-    <div className="rounded-md border border-custom-border-200 bg-custom-background-100 p-3">
+    <Card variant={ECardVariant.WITHOUT_SHADOW} spacing={ECardSpacing.SM}>
       <div className="flex items-start gap-3">
         <button
           onClick={() => setExpanded((x) => !x)}
-          className="flex-1 text-left"
+          className="mt-0.5 text-tertiary hover:text-primary"
+          aria-label={expanded ? "Свернуть" : "Развернуть"}
         >
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-custom-text-100">{goal.title}</span>
-            <StatusChip status={goal.status} />
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-custom-text-300">
-            {goal.deadline && <span>📅 до {goal.deadline}</span>}
-            {epicCount > 0 && <span>📋 {epicCount} эпиков · {taskCount} задач</span>}
+          {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+        </button>
+        <div className="flex-1">
+          <button
+            onClick={() => setExpanded((x) => !x)}
+            className="text-left text-body-sm font-medium text-primary hover:text-accent-primary"
+          >
+            {goal.title}
+          </button>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <Badge variant={STATUS_BADGE[goal.status] ?? "neutral"} size="sm">
+              {goal.status}
+            </Badge>
+            {goal.deadline && (
+              <div className="flex items-center gap-1 text-caption-md text-tertiary">
+                <Calendar className="size-3" />
+                до {goal.deadline}
+              </div>
+            )}
+            {epicCount > 0 && (
+              <div className="flex items-center gap-1 text-caption-md text-tertiary">
+                <ListChecks className="size-3" />
+                {epicCount} эпиков · {taskCount} задач
+              </div>
+            )}
             {goal.plan_issue_count > 0 && (
-              <span className="text-green-500">✓ создано {goal.plan_issue_count} issues</span>
+              <div className="flex items-center gap-1 text-caption-md text-success-primary">
+                <CheckCircle2 className="size-3" />
+                создано {goal.plan_issue_count} issues
+              </div>
             )}
           </div>
-        </button>
+        </div>
         {canApply && (
-          <button
+          <Button
+            variant="primary"
+            size="base"
             onClick={onApply}
             disabled={busy}
-            className="rounded-md bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-600 hover:bg-green-500/20 disabled:opacity-50"
+            loading={busy}
+            prependIcon={<PlayCircle />}
           >
-            {busy ? "..." : "Применить план"}
-          </button>
+            Применить план
+          </Button>
         )}
       </div>
       {expanded && plan?.epics && (
-        <div className="mt-3 space-y-2 border-t border-custom-border-200 pt-3">
+        <div className="mt-3 space-y-3 border-t border-subtle-1 pt-3">
           {plan.summary && (
-            <p className="text-xs italic text-custom-text-300">{plan.summary}</p>
+            <p className="text-body-xs italic text-tertiary">{plan.summary}</p>
           )}
           {plan.epics.map((epic: any, i: number) => (
-            <div key={i}>
-              <div className="text-xs font-semibold text-custom-text-200">{epic.name}</div>
-              <ul className="ml-3 list-disc text-xs text-custom-text-300">
-                {(epic.tasks ?? []).slice(0, 8).map((t: any, j: number) => (
-                  <li key={j}>
-                    <span className="text-custom-text-200">{t.name}</span>
+            <div key={i} className="space-y-1">
+              <div className="text-body-xs font-medium text-secondary">{epic.name}</div>
+              <ul className="ml-1 space-y-0.5">
+                {(epic.tasks ?? []).slice(0, 10).map((t: any, j: number) => (
+                  <li key={j} className="flex items-start gap-1.5 text-body-xs text-tertiary">
+                    <span className="mt-0.5 size-1 shrink-0 rounded-full bg-tertiary" />
+                    <span className="text-secondary">{t.name}</span>
                     {t.estimated_hours && (
-                      <span className="ml-1 text-custom-text-400">({t.estimated_hours}ч)</span>
+                      <span className="ml-1 text-placeholder">({t.estimated_hours} ч)</span>
                     )}
                   </li>
                 ))}
-                {epic.tasks?.length > 8 && (
-                  <li className="text-custom-text-400">… ещё {epic.tasks.length - 8}</li>
+                {epic.tasks?.length > 10 && (
+                  <li className="ml-2.5 text-body-xs text-placeholder">
+                    … ещё {epic.tasks.length - 10}
+                  </li>
                 )}
               </ul>
             </div>
           ))}
         </div>
       )}
-    </div>
-  );
-};
-
-const StatusChip: React.FC<{ status: string }> = ({ status }) => {
-  const cls: Record<string, string> = {
-    draft: "bg-custom-background-90 text-custom-text-300",
-    planning: "bg-blue-500/10 text-blue-500",
-    executing: "bg-green-500/10 text-green-500",
-    at_risk: "bg-yellow-500/10 text-yellow-600",
-    blocked: "bg-red-500/10 text-red-500",
-    done: "bg-custom-background-80 text-custom-text-300",
-  };
-  return (
-    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${cls[status] ?? cls.draft}`}>
-      {status}
-    </span>
+    </Card>
   );
 };
 
@@ -342,80 +406,86 @@ const RiskPanel: React.FC<{ risks: Risk[]; onResolve: (id: string) => Promise<an
   risks,
   onResolve,
 }) => (
-  <div className="rounded-md border border-custom-border-200 bg-custom-background-100 p-3">
+  <Card variant={ECardVariant.WITHOUT_SHADOW} spacing={ECardSpacing.SM}>
     <div className="mb-2 flex items-center justify-between">
-      <h3 className="text-sm font-semibold text-custom-text-100">🚨 Открытые риски</h3>
-      <span className="text-xs text-custom-text-400">{risks.length}</span>
+      <div className="flex items-center gap-2">
+        <AlertTriangle className="size-4 text-warning-primary" />
+        <h3 className="text-body-sm font-semibold text-primary">Открытые риски</h3>
+      </div>
+      <Badge variant={risks.length === 0 ? "neutral" : "warning"} size="sm">
+        {risks.length}
+      </Badge>
     </div>
     {risks.length === 0 ? (
-      <p className="text-xs text-custom-text-300">MONITOR не видит проблем.</p>
+      <p className="py-2 text-body-xs text-tertiary">MONITOR не видит проблем.</p>
     ) : (
-      <ul className="space-y-2">
+      <ul className="space-y-1.5">
         {risks.slice(0, 6).map((r) => (
           <li
             key={r.id}
-            className="rounded border border-custom-border-200 bg-custom-background-90 p-2"
+            className="rounded-md border border-subtle-1 bg-layer-2 p-2"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1">
                 <div className="flex items-center gap-1.5">
-                  <span
-                    className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                      IMPACT_BG[r.impact] ?? IMPACT_BG.medium
-                    }`}
-                  >
+                  <Badge variant={IMPACT_BADGE[r.impact] ?? "neutral"} size="sm">
                     {r.impact}
+                  </Badge>
+                  <span className="text-body-xs font-medium text-secondary">
+                    {r.risk_type}
                   </span>
-                  <span className="text-xs text-custom-text-200">{r.risk_type}</span>
-                  <span className="text-[10px] text-custom-text-400">
+                  <span className="text-caption-md text-placeholder">
                     {Math.round(r.confidence * 100)}%
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-custom-text-300">{r.rationale}</p>
+                <p className="mt-1 text-body-xs text-tertiary">{r.rationale}</p>
               </div>
               <button
                 onClick={() => onResolve(r.id)}
-                className="text-xs text-custom-text-400 hover:text-custom-text-100"
+                className="text-tertiary hover:text-success-primary"
                 title="Отметить как решённый"
+                aria-label="Решено"
               >
-                ✓
+                <CheckCircle2 className="size-4" />
               </button>
             </div>
           </li>
         ))}
       </ul>
     )}
-  </div>
+  </Card>
 );
 
 // ---- Activity feed --------------------------------------------------
 
 const ActivityPanel: React.FC<{ actions: Action[] }> = ({ actions }) => (
-  <div className="flex min-h-0 flex-1 flex-col rounded-md border border-custom-border-200 bg-custom-background-100 p-3">
-    <h3 className="mb-2 text-sm font-semibold text-custom-text-100">🧠 Лента агентов</h3>
+  <Card
+    variant={ECardVariant.WITHOUT_SHADOW}
+    spacing={ECardSpacing.SM}
+    className="flex min-h-0 flex-1 flex-col"
+  >
+    <div className="mb-2 flex items-center gap-2">
+      <Activity className="size-4 text-accent-primary" />
+      <h3 className="text-body-sm font-semibold text-primary">Лента агентов</h3>
+    </div>
     {actions.length === 0 ? (
-      <p className="text-xs text-custom-text-300">Пока тихо.</p>
+      <p className="py-2 text-body-xs text-tertiary">Пока тихо.</p>
     ) : (
-      <ul className="flex-1 space-y-1.5 overflow-y-auto">
+      <ul className="flex-1 space-y-2 overflow-y-auto pr-1">
         {actions.map((a) => (
-          <li key={a.id} className="text-xs">
+          <li key={a.id} className="border-l-2 border-subtle-1 pl-2.5">
             <div className="flex items-center gap-1.5">
-              <span
-                className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                  AGENT_COLORS[a.agent_type] ?? "bg-custom-background-90 text-custom-text-300"
-                }`}
-              >
+              <Badge variant={AGENT_VARIANT[a.agent_type] ?? "neutral"} size="sm">
                 {a.agent_type}
+              </Badge>
+              <span className="text-body-xs font-medium text-secondary">
+                {a.action_type}
               </span>
-              <span className="text-custom-text-200">{a.action_type}</span>
-              <span
-                className={`rounded px-1 py-0.5 text-[9px] ${
-                  RISK_LEVEL_BG[a.risk_level] ?? "bg-custom-background-90 text-custom-text-300"
-                }`}
-              >
+              <Badge variant={RISK_BADGE[a.risk_level] ?? "neutral"} size="sm">
                 {a.risk_level}
-              </span>
-              <span className="ml-auto text-[10px] text-custom-text-400">
+              </Badge>
+              <span className="ml-auto flex items-center gap-1 text-caption-md text-placeholder">
+                <Clock className="size-3" />
                 {new Date(a.created_at).toLocaleTimeString("ru-RU", {
                   hour: "2-digit",
                   minute: "2-digit",
@@ -423,22 +493,13 @@ const ActivityPanel: React.FC<{ actions: Action[] }> = ({ actions }) => (
               </span>
             </div>
             {a.reasoning && (
-              <p className="ml-1 mt-0.5 truncate text-[11px] text-custom-text-300">
-                {a.reasoning}
-              </p>
+              <p className="mt-0.5 truncate text-body-xs text-tertiary">{a.reasoning}</p>
             )}
           </li>
         ))}
       </ul>
     )}
-  </div>
-);
-
-const Loader: React.FC<{ text: string }> = ({ text }) => (
-  <div className="flex items-center justify-center gap-2 p-4 text-xs text-custom-text-300">
-    <span className="h-3 w-3 animate-spin rounded-full border-2 border-custom-primary-100 border-t-transparent" />
-    {text}
-  </div>
+  </Card>
 );
 
 export default OrchestratorPage;
