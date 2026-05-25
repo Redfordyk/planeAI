@@ -151,7 +151,13 @@ class OpenAIEmbed:
     """
 
     def __init__(self, api_key: str, model: str = EMBED_MODEL) -> None:
-        self.client = openai.OpenAI(api_key=api_key, max_retries=0)
+        # openai==1.54 + httpx>=0.28 mismatch on the `proxies` kwarg —
+        # if we let the SDK construct the default httpx client it
+        # passes `proxies=` to the new httpx.Client which only accepts
+        # `proxy=`. Hand it our own client to bypass that path.
+        import httpx
+        http = httpx.Client(timeout=httpx.Timeout(60.0, connect=10.0))
+        self.client = openai.OpenAI(api_key=api_key, max_retries=0, http_client=http)
         self.model = model
 
     def embed(self, texts: list[str]) -> tuple[list[list[float]], int]:
