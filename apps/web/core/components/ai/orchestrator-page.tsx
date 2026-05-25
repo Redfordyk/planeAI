@@ -23,19 +23,18 @@ import {
   ChevronRight,
   Clock,
   ListChecks,
+  Loader2,
   Pause,
   PlayCircle,
   Plus,
   ShieldAlert,
   Sparkles,
   Target,
-  X,
 } from "lucide-react";
 import { Badge } from "@plane/propel/badge";
 import { Button } from "@plane/propel/button";
 import { Card, ECardSpacing, ECardVariant } from "@plane/propel/card";
 import { Input } from "@plane/propel/input";
-import { Spinner } from "@plane/propel/spinners";
 import {
   useActivityFeed,
   useApplyPlan,
@@ -271,7 +270,7 @@ const GoalList: React.FC<{
     return (
       <Card variant={ECardVariant.WITHOUT_SHADOW} spacing={ECardSpacing.LG}>
         <div className="flex items-center justify-center gap-2 py-6 text-body-sm text-tertiary">
-          <Spinner className="size-4" />
+          <Loader2 className="size-4 animate-spin" />
           Загружаю цели…
         </div>
       </Card>
