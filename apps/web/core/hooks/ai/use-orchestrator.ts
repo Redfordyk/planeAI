@@ -227,6 +227,24 @@ export function useKillSwitch(workspaceId: string) {
   return { engaged, flip, reload };
 }
 
+export type ProjectLite = { id: string; name: string; identifier: string };
+
+export function useProjects(workspaceSlug: string) {
+  const [projects, setProjects] = useState<ProjectLite[]>([]);
+  const [loading, setLoading] = useState(false);
+  const reload = useCallback(async () => {
+    if (!workspaceSlug) return;
+    setLoading(true);
+    const r = await getJson<ProjectLite[]>(`/api/workspaces/${workspaceSlug}/projects/`);
+    setProjects(Array.isArray(r) ? r : []);
+    setLoading(false);
+  }, [workspaceSlug]);
+  useEffect(() => {
+    reload();
+  }, [reload]);
+  return { projects, loading, reload };
+}
+
 export function useTriggerScan(workspaceId: string) {
   const [busy, setBusy] = useState(false);
   const run = useCallback(

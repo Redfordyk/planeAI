@@ -301,7 +301,9 @@ def t_goals_list(state: dict) -> TestResult:
 
 
 def t_goal_create(state: dict) -> TestResult:
-    r = TestResult("orch.goal.create+planner")
+    """Create goal WITHOUT project — simulates a user who didn't pick
+    one in the form. apply will need to provide it later."""
+    r = TestResult("orch.goal.create(no_project)+planner")
     if not state.get("ws"):
         r.error = "no ws"
         return r
@@ -315,6 +317,7 @@ def t_goal_create(state: dict) -> TestResult:
             "description": "Small test goal — minimal task set.",
             "deadline": "2026-12-31",
             "run_planner": True,
+            # intentionally no `project` field
         },
         headers=auth_headers(csrf),
         timeout=120,
@@ -339,8 +342,41 @@ def t_goal_create(state: dict) -> TestResult:
     return r
 
 
+def t_goal_apply_no_project_error(state: dict) -> TestResult:
+    """Reproduces the screenshot bug: user hits Применить план without
+    binding a project — server MUST 400 with a useful error, not 500."""
+    r = TestResult("orch.goal.apply(no_body→400)")
+    if not state.get("new_goal_id") or not state.get("ws"):
+        r.error = "no goal/ws"
+        return r
+    csrf = csrf_token()
+    code, body, ms, err = request(
+        "POST",
+        f"/api/ai/workspaces/{state['ws']}/orchestrator/goals/{state['new_goal_id']}/apply/",
+        json_body={},
+        headers=auth_headers(csrf),
+        timeout=60,
+    )
+    r.status, r.elapsed_ms = code, ms
+    if err:
+        r.error = err
+    elif code == 400:
+        try:
+            d = json.loads(body)
+            msg = (d.get("error") or "").lower()
+            r.ok = "project" in msg
+            r.notes = {"error": d.get("error")}
+            if not r.ok:
+                r.error = f"unexpected: {d.get('error')}"
+        except Exception as e:
+            r.error = f"bad json: {e}"
+    else:
+        r.error = f"expected 400 got {code}: {body[:200]!r}"
+    return r
+
+
 def t_goal_apply(state: dict) -> TestResult:
-    r = TestResult("orch.goal.apply")
+    r = TestResult("orch.goal.apply(explicit_project)")
     if not state.get("new_goal_id") or not state.get("project_id"):
         r.error = "missing goal_id or project_id"
         return r
@@ -354,6 +390,97 @@ def t_goal_apply(state: dict) -> TestResult:
         json_body={"project": state["project_id"]},
         headers=auth_headers(csrf),
         timeout=120,
+    )
+    r.status, r.elapsed_ms = code, ms
+    if err:
+        r.error = err
+    elif code != 201:
+        r.error = body[:300].decode("utf-8", "replace")
+    else:
+        try:
+            d = json.loads(body)
+            r.ok = True
+            r.notes = {"created": d["applied"]["created_issue_count"]}
+        except Exception as e:
+            r.error = f"bad json: {e}"
+    return r
+
+
+def t_goal_detail(state: dict) -> TestResult:
+    r = TestResult("orch.goal.detail")
+    if not state.get("new_goal_id") or not state.get("ws"):
+        r.error = "no goal/ws"
+        return r
+    code, body, ms, err = request(
+        "GET",
+        f"/api/ai/workspaces/{state['ws']}/orchestrator/goals/{state['new_goal_id']}/",
+    )
+    r.status, r.elapsed_ms = code, ms
+    if err:
+        r.error = err
+    elif code != 200:
+        r.error = body[:200].decode("utf-8", "replace")
+    else:
+        try:
+            d = json.loads(body)
+            r.ok = True
+            r.notes = {"status": d["goal"]["status"], "issues": d["goal"]["plan_issue_count"]}
+        except Exception as e:
+            r.error = f"bad json: {e}"
+    return r
+
+
+def t_goal_create_with_project(state: dict) -> TestResult:
+    """New UI: user picks project in form → goal has project_id set."""
+    r = TestResult("orch.goal.create(with_project)")
+    if not state.get("ws") or not state.get("project_id"):
+        r.error = "no ws/project"
+        return r
+    csrf = csrf_token()
+    code, body, ms, err = request(
+        "POST",
+        f"/api/ai/workspaces/{state['ws']}/orchestrator/goals/",
+        json_body={
+            "title": f"E2E Bound {int(time.time())}",
+            "description": "Tiny scope.",
+            "project": state["project_id"],
+            "run_planner": True,
+        },
+        headers=auth_headers(csrf),
+        timeout=120,
+    )
+    r.status, r.elapsed_ms = code, ms
+    if err:
+        r.error = err
+    elif code != 201:
+        r.error = body[:300].decode("utf-8", "replace")
+    else:
+        try:
+            d = json.loads(body)
+            ok_bound = d["goal"]["project_id"] == state["project_id"]
+            r.ok = ok_bound
+            r.notes = {"bound": ok_bound, "tasks": (d.get("plan_summary") or {}).get("task_count")}
+            if not ok_bound:
+                r.error = f"project not bound: {d['goal'].get('project_id')}"
+            state["bound_goal_id"] = d["goal"]["id"]
+        except Exception as e:
+            r.error = f"bad json: {e}"
+    return r
+
+
+def t_bound_goal_apply(state: dict) -> TestResult:
+    """Goal already has project_id — apply with empty body must succeed."""
+    r = TestResult("orch.goal.apply(bound→empty_body)")
+    if not state.get("bound_goal_id"):
+        r.error = "no bound goal"
+        return r
+    csrf = csrf_token()
+    code, body, ms, err = request(
+        "POST",
+        f"/api/ai/workspaces/{state['ws']}/orchestrator/goals/{state['bound_goal_id']}/apply/",
+        json_body={},
+        headers=auth_headers(csrf),
+        timeout=60,
     )
     r.status, r.elapsed_ms = code, ms
     if err:
@@ -657,7 +784,11 @@ def main() -> int:
         t_usage_stats,
         t_goals_list,
         t_goal_create,
+        t_goal_apply_no_project_error,
         t_goal_apply,
+        t_goal_detail,
+        t_goal_create_with_project,
+        t_bound_goal_apply,
         t_goal_report,
         t_trigger_scan,
         t_trigger_analyst,

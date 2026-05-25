@@ -41,9 +41,11 @@ import {
   useCreateGoal,
   useGoals,
   useKillSwitch,
+  useProjects,
   useRisks,
   type Action,
   type Goal,
+  type ProjectLite,
   type Risk,
 } from "@/hooks/ai/use-orchestrator";
 
@@ -85,11 +87,12 @@ const STATUS_BADGE: Record<string, "neutral" | "brand" | "warning" | "success" |
   done: "neutral",
 };
 
-export const OrchestratorPage: React.FC<Props> = ({ workspaceId }) => {
+export const OrchestratorPage: React.FC<Props> = ({ workspaceId, workspaceSlug }) => {
   const { goals, loading: goalsLoading, reload: reloadGoals } = useGoals(workspaceId);
   const { actions, reload: reloadActions } = useActivityFeed(workspaceId);
   const { risks, resolve, reload: reloadRisks } = useRisks(workspaceId);
   const { engaged, flip } = useKillSwitch(workspaceId);
+  const { projects } = useProjects(workspaceSlug);
 
   return (
     <div className="flex h-full w-full flex-col gap-5 bg-layer-1 p-6 text-primary">
@@ -100,6 +103,7 @@ export const OrchestratorPage: React.FC<Props> = ({ workspaceId }) => {
         <div className="flex min-h-0 flex-col gap-3 overflow-hidden">
           <GoalCreator
             workspaceId={workspaceId}
+            projects={projects}
             onCreated={() => {
               reloadGoals();
               reloadActions();
@@ -109,6 +113,7 @@ export const OrchestratorPage: React.FC<Props> = ({ workspaceId }) => {
             goals={goals}
             loading={goalsLoading}
             workspaceId={workspaceId}
+            projects={projects}
             onApplied={() => {
               reloadGoals();
               reloadActions();
@@ -160,15 +165,17 @@ const PageHeader: React.FC<{ engaged: boolean | null; onFlip: (n: boolean) => Pr
 
 // ---- Goal creator ----------------------------------------------------
 
-const GoalCreator: React.FC<{ workspaceId: string; onCreated: () => void }> = ({
-  workspaceId,
-  onCreated,
-}) => {
+const GoalCreator: React.FC<{
+  workspaceId: string;
+  projects: ProjectLite[];
+  onCreated: () => void;
+}> = ({ workspaceId, projects, onCreated }) => {
   const { create, busy, err } = useCreateGoal(workspaceId);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [deadline, setDeadline] = useState("");
+  const [projectId, setProjectId] = useState("");
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -176,12 +183,14 @@ const GoalCreator: React.FC<{ workspaceId: string; onCreated: () => void }> = ({
       title,
       description: description || undefined,
       deadline: deadline || undefined,
+      project: projectId || undefined,
       run_planner: true,
     });
     if (r.ok) {
       setTitle("");
       setDescription("");
       setDeadline("");
+      setProjectId("");
       setOpen(false);
       onCreated();
     }
@@ -222,7 +231,7 @@ const GoalCreator: React.FC<{ workspaceId: string; onCreated: () => void }> = ({
           rows={2}
           className="w-full rounded-md border border-strong bg-layer-2 px-3 py-2 text-body-sm text-primary placeholder:text-placeholder focus:border-accent-strong focus:outline-none"
         />
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1.5 rounded-md border border-strong bg-layer-2 px-2 py-1.5">
             <Calendar className="size-3.5 text-tertiary" />
             <input
@@ -232,6 +241,18 @@ const GoalCreator: React.FC<{ workspaceId: string; onCreated: () => void }> = ({
               className="bg-transparent text-body-xs text-primary outline-none"
             />
           </div>
+          <select
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+            className="rounded-md border border-strong bg-layer-2 px-2 py-1.5 text-body-xs text-primary outline-none focus:border-accent-strong"
+          >
+            <option value="">Проект (по желанию)</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
           <div className="flex-1" />
           <Button variant="ghost" size="lg" onClick={() => setOpen(false)} type="button">
             Отмена
@@ -264,8 +285,9 @@ const GoalList: React.FC<{
   goals: Goal[] | null;
   loading: boolean;
   workspaceId: string;
+  projects: ProjectLite[];
   onApplied: () => void;
-}> = ({ goals, loading, workspaceId, onApplied }) => {
+}> = ({ goals, loading, workspaceId, projects, onApplied }) => {
   if (loading && !goals) {
     return (
       <Card variant={ECardVariant.WITHOUT_SHADOW} spacing={ECardSpacing.LG}>
@@ -292,26 +314,51 @@ const GoalList: React.FC<{
   return (
     <div className="flex flex-1 flex-col gap-2 overflow-y-auto">
       {goals.map((g) => (
-        <GoalCard key={g.id} goal={g} workspaceId={workspaceId} onApplied={onApplied} />
+        <GoalCard
+          key={g.id}
+          goal={g}
+          workspaceId={workspaceId}
+          projects={projects}
+          onApplied={onApplied}
+        />
       ))}
     </div>
   );
 };
 
-const GoalCard: React.FC<{ goal: Goal; workspaceId: string; onApplied: () => void }> = ({
-  goal,
-  workspaceId,
-  onApplied,
-}) => {
+const GoalCard: React.FC<{
+  goal: Goal;
+  workspaceId: string;
+  projects: ProjectLite[];
+  onApplied: () => void;
+}> = ({ goal, workspaceId, projects, onApplied }) => {
   const { apply, busy } = useApplyPlan(workspaceId);
   const [expanded, setExpanded] = useState(false);
+  const [pickingProject, setPickingProject] = useState(false);
+  const [chosenProject, setChosenProject] = useState<string>(goal.project_id ?? "");
+  const [applyError, setApplyError] = useState<string | null>(null);
   const plan = goal.plan_preview as any;
   const epicCount = plan?.epics?.length ?? 0;
   const taskCount = plan?.task_count ?? 0;
   const canApply = goal.status === "planning" && taskCount > 0 && goal.plan_issue_count === 0;
+  const runApply = async (projectId: string) => {
+    setApplyError(null);
+    const r = await apply(goal.id, projectId || undefined);
+    if (r.ok) {
+      setPickingProject(false);
+      onApplied();
+    } else {
+      setApplyError(r.error ?? "не удалось применить план");
+    }
+  };
   const onApply = async () => {
-    const r = await apply(goal.id);
-    if (r.ok) onApplied();
+    if (goal.project_id) {
+      await runApply(goal.project_id);
+      return;
+    }
+    // No bound project — open picker. Default to first project.
+    if (!chosenProject && projects.length > 0) setChosenProject(projects[0].id);
+    setPickingProject(true);
   };
   return (
     <Card variant={ECardVariant.WITHOUT_SHADOW} spacing={ECardSpacing.SM}>
@@ -367,6 +414,47 @@ const GoalCard: React.FC<{ goal: Goal; workspaceId: string; onApplied: () => voi
           </Button>
         )}
       </div>
+      {pickingProject && (
+        <div className="mt-3 rounded-md border border-subtle-1 bg-layer-2 p-3">
+          <p className="mb-2 text-body-xs text-secondary">
+            Выбери проект, в который PLANNER создаст задачи:
+          </p>
+          <div className="flex items-center gap-2">
+            <select
+              value={chosenProject}
+              onChange={(e) => setChosenProject(e.target.value)}
+              className="flex-1 rounded-md border border-strong bg-layer-1 px-2 py-1.5 text-body-xs text-primary outline-none focus:border-accent-strong"
+            >
+              {projects.length === 0 && <option value="">Нет доступных проектов</option>}
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.identifier})
+                </option>
+              ))}
+            </select>
+            <Button
+              variant="ghost"
+              size="base"
+              onClick={() => setPickingProject(false)}
+              type="button"
+            >
+              Отмена
+            </Button>
+            <Button
+              variant="primary"
+              size="base"
+              onClick={() => runApply(chosenProject)}
+              disabled={busy || !chosenProject}
+              loading={busy}
+            >
+              Создать задачи
+            </Button>
+          </div>
+          {applyError && (
+            <p className="mt-2 text-body-xs text-danger-primary">{applyError}</p>
+          )}
+        </div>
+      )}
       {expanded && plan?.epics && (
         <div className="mt-3 space-y-3 border-t border-subtle-1 pt-3">
           {plan.summary && (
