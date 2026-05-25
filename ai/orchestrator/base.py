@@ -26,6 +26,7 @@ from typing import Any
 from uuid import UUID
 
 from django.apps import apps
+from django.db import IntegrityError, transaction
 
 from .decision import (
     AUTO,
@@ -63,19 +64,27 @@ def log_action(
     AgentAction = apps.get_model("ai", "AgentAction")
     if is_forbidden(action_type):
         # We persist the rejection so the audit shows the attempt.
-        return AgentAction.objects.create(
-            workspace_id=workspace_id,
-            project_id=project_id,
-            goal_id=goal_id,
-            target_issue_id=target_issue_id,
-            agent_type=agent_type,
-            action_type=action_type,
-            input=input or {},
-            output=output or {},
-            reasoning=reasoning,
-            risk_level=ESCALATE,
-            status="rejected",
-        )
+        # Wrap in savepoint so a FK violation (workspace rolled back
+        # between event enqueue and worker pickup — common in pytest)
+        # doesn't poison the surrounding transaction.
+        try:
+            with transaction.atomic():
+                return AgentAction.objects.create(
+                    workspace_id=workspace_id,
+                    project_id=project_id,
+                    goal_id=goal_id,
+                    target_issue_id=target_issue_id,
+                    agent_type=agent_type,
+                    action_type=action_type,
+                    input=input or {},
+                    output=output or {},
+                    reasoning=reasoning,
+                    risk_level=ESCALATE,
+                    status="rejected",
+                )
+        except IntegrityError as exc:
+            logger.warning("forbidden-audit FK violation ws=%s: %s", workspace_id, exc)
+            return None
 
     risk_level = decide(action_type, on_critical_path=on_critical_path)
     if force_status:
@@ -89,19 +98,33 @@ def log_action(
     else:  # ESCALATE
         status = "awaiting_user"
 
-    row = AgentAction.objects.create(
-        workspace_id=workspace_id,
-        project_id=project_id,
-        goal_id=goal_id,
-        target_issue_id=target_issue_id,
-        agent_type=agent_type,
-        action_type=action_type,
-        input=input or {},
-        output=output or {},
-        reasoning=reasoning,
-        risk_level=risk_level or ESCALATE,
-        status=status,
-    )
+    try:
+        with transaction.atomic():
+            row = AgentAction.objects.create(
+                workspace_id=workspace_id,
+                project_id=project_id,
+                goal_id=goal_id,
+                target_issue_id=target_issue_id,
+                agent_type=agent_type,
+                action_type=action_type,
+                input=input or {},
+                output=output or {},
+                reasoning=reasoning,
+                risk_level=risk_level or ESCALATE,
+                status=status,
+            )
+    except IntegrityError as exc:
+        # workspace_id / project_id / goal_id FK can fail if the
+        # referenced row was deleted between the orchestrator's
+        # precheck and the audit write — most commonly pytest
+        # transactions rolling back the parent row before the
+        # signal-driven Celery task lands. Audit can never crash the
+        # caller; log and return None.
+        logger.warning(
+            "agent.action FK violation ws=%s %s/%s: %s",
+            workspace_id, agent_type, action_type, exc,
+        )
+        return None
     logger.info(
         "agent.action: ws=%s %s/%s risk=%s status=%s",
         workspace_id, agent_type, action_type, row.risk_level, status,

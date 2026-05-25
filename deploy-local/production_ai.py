@@ -22,3 +22,8 @@ ROOT_URLCONF = "ai._root_urls"
 # default). Generate per environment via `python scripts/gen_encryption_key.py`
 # and inject through the container's environment.
 FIELD_ENCRYPTION_KEY = os.environ.get("FIELD_ENCRYPTION_KEY", "")
+
+# Celery 6.0 deprecation: broker_connection_retry no longer governs
+# startup-time retries by default. Silence the noisy warning while
+# preserving the current "retry on startup" behaviour we want.
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True

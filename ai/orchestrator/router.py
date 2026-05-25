@@ -195,18 +195,37 @@ def handle_event(event_dict: dict) -> dict:
     try:
         ensure_agents_allowed(event.workspace_id)
     except AgentsHalted as exc:
-        log_action(
-            workspace_id=event.workspace_id,
-            project_id=event.project_id,
-            target_issue_id=event.issue_id,
-            agent_type=AgentAction.AGENT_ORCHESTRATOR,
-            action_type="escalate_to_pm",  # uses a known matrix key
-            input=event.to_dict(),
-            output={"halt_reason": str(exc)},
-            reasoning=str(exc),
-            force_status="rejected",
-        )
-        summary["skipped"] = f"halted:{exc}"
+        reason = str(exc)
+        # "no_ai_config_for_workspace" / "ai_disabled_for_workspace" —
+        # we don't own this workspace (or it's gone). Don't try to
+        # write an AgentAction row: at best it duplicates the warning,
+        # at worst it triggers a FK violation when the workspace was
+        # rolled back by a test (pytest transactions) or hard-deleted.
+        if reason in {"no_ai_config_for_workspace", "ai_disabled_for_workspace"}:
+            summary["skipped"] = f"halted:{reason}"
+            return summary
+        # Real halt — kill switch or breaker. Audit it, but never let
+        # an audit failure crash the orchestrator: FK constraints can
+        # still fire if workspace was deleted between the precheck
+        # and the INSERT.
+        try:
+            log_action(
+                workspace_id=event.workspace_id,
+                project_id=event.project_id,
+                target_issue_id=event.issue_id,
+                agent_type=AgentAction.AGENT_ORCHESTRATOR,
+                action_type="escalate_to_pm",
+                input=event.to_dict(),
+                output={"halt_reason": reason},
+                reasoning=reason,
+                force_status="rejected",
+            )
+        except Exception as audit_exc:
+            logger.warning(
+                "halt-audit write failed for ws=%s reason=%s: %s",
+                event.workspace_id, reason, audit_exc,
+            )
+        summary["skipped"] = f"halted:{reason}"
         return summary
 
     # 4. Issue-scoped lock so two events on the same issue don't race.
@@ -244,16 +263,19 @@ def handle_event(event_dict: dict) -> dict:
                 )
             hops += 1
 
-    log_action(
-        workspace_id=event.workspace_id,
-        project_id=event.project_id,
-        target_issue_id=event.issue_id,
-        agent_type=AgentAction.AGENT_ORCHESTRATOR,
-        action_type="add_comment",  # closest matrix slot for "logging"
-        input={"event": event.type, "issue_id": event.issue_id},
-        output=summary,
-        reasoning=f"routed {event.type} to {len(summary['ran'])} agents",
-    )
+    try:
+        log_action(
+            workspace_id=event.workspace_id,
+            project_id=event.project_id,
+            target_issue_id=event.issue_id,
+            agent_type=AgentAction.AGENT_ORCHESTRATOR,
+            action_type="add_comment",  # closest matrix slot for "logging"
+            input={"event": event.type, "issue_id": event.issue_id},
+            output=summary,
+            reasoning=f"routed {event.type} to {len(summary['ran'])} agents",
+        )
+    except Exception as audit_exc:
+        logger.warning("route-audit write failed for ws=%s: %s", event.workspace_id, audit_exc)
     return summary
 
 
