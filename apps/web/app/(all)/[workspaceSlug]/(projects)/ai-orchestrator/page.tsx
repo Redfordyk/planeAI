@@ -1,30 +1,29 @@
 /**
  * planeAI — Multi-Agent Orchestrator route (phase 12.1).
  *
- * Mounted at /{workspaceSlug}/ai-orchestrator/. Resolves workspace
- * UUID from the slug via useWorkspace() store. Mount is gated on a
- * client-side `mounted` flag so SSR markup matches the first client
- * paint — without it React reports hydration errors #418 / #423
- * because getWorkspaceBySlug() returns null on the server and a
- * populated object on the client.
+ * Matches the drafts/page.tsx pattern exactly:
+ *   - default export component function
+ *   - Route.ComponentProps from RR7 typed routes
+ *   - PageHead + content wrapper
+ *
+ * Workspace UUID is resolved from the slug via the mobx store. We
+ * gate the heavy <OrchestratorPage /> behind a mounted guard so the
+ * server-rendered shell and the first client paint emit the same
+ * markup (avoids React errors #418 / #423).
  */
-
-"use client";
 
 import { useEffect, useState } from "react";
 import { observer } from "mobx-react";
-import { useParams } from "react-router";
 import { Loader2 } from "lucide-react";
 import { PageHead } from "@/components/core/page-title";
 import { OrchestratorPage } from "@/components/ai";
 import { useWorkspace } from "@/hooks/store/use-workspace";
+import type { Route } from "./+types/page";
 
-const Page = observer(function Page() {
-  const params = useParams<{ workspaceSlug: string }>();
-  const workspaceSlug = params.workspaceSlug ?? "";
+const AIOrchestratorPage = observer(function AIOrchestratorPage({ params }: Route.ComponentProps) {
+  const { workspaceSlug } = params;
   const { getWorkspaceBySlug } = useWorkspace();
 
-  // Hydration guard — SSR has no workspace store, client does.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
@@ -52,4 +51,4 @@ const Page = observer(function Page() {
   );
 });
 
-export default Page;
+export default AIOrchestratorPage;
