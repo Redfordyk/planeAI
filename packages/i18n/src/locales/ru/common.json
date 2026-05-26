@@ -867,5 +867,122 @@
       "description": "Экспорт рабочих элементов в JSON-файл.",
       "short_description": "Экспорт в json"
     }
+  },
+  "activity_feed": {
+    "you": "Вы",
+    "commented": "Прокомментировал(а)",
+    "this_work_item": "этот рабочий элемент",
+    "a_work_item": "рабочий элемент",
+    "issue_link_deleted": "Этот рабочий элемент был удалён",
+    "from_intake_by_duplicate": " из входящих, отметив как дубликат.",
+    "updated_intake_status": "обновил(а) статус входящего рабочего элемента.",
+    "inbox": {
+      "declined_with_issue": "отклонил(а) рабочий элемент",
+      "declined_no_issue": "отклонил(а) этот рабочий элемент из входящих.",
+      "snoozed_with_issue": "отложил(а) рабочий элемент",
+      "snoozed_no_issue": "отложил(а) этот рабочий элемент.",
+      "accepted_with_issue": "принял(а) рабочий элемент",
+      "accepted_no_issue": "принял(а) этот рабочий элемент из входящих."
+    },
+    "assignees": {
+      "added": "добавил(а) исполнителя",
+      "removed": "убрал(а) исполнителя"
+    },
+    "archive": {
+      "restored": "восстановил(а)",
+      "archived": "архивировал(а)"
+    },
+    "attachment": {
+      "uploaded": "загрузил(а) новое вложение",
+      "removed": "удалил(а) вложение"
+    },
+    "description": {
+      "updated": "обновил(а) описание"
+    },
+    "estimate": {
+      "removed": "убрал(а) оценку",
+      "set_to": "установил(а) оценку"
+    },
+    "issue": {
+      "created": "создал(а)",
+      "deleted": "удалил(а)",
+      "converted_to_epic": "в эпик",
+      "converted_to_issue": "в рабочий элемент",
+      "converted_prefix": "преобразовал(а)"
+    },
+    "label": {
+      "added": "добавил(а) метку",
+      "removed": "удалил(а) метку"
+    },
+    "link": {
+      "added": "добавил(а)",
+      "updated": "обновил(а)",
+      "removed": "удалил(а)",
+      "link_word": "ссылку"
+    },
+    "cycle": {
+      "added_prefix": "добавил(а)",
+      "to_the_cycle": "в цикл",
+      "set_to": "установил(а) цикл",
+      "removed_prefix": "убрал(а)",
+      "from_the_cycle": "из цикла"
+    },
+    "module": {
+      "added_prefix": "добавил(а)",
+      "to_the_module": "в модуль",
+      "set_to": "установил(а) модуль",
+      "removed_prefix": "убрал(а)",
+      "from_the_module": "из модуля"
+    },
+    "name": {
+      "set_to": "изменил(а) название на"
+    },
+    "parent": {
+      "removed": "убрал(а) родителя",
+      "set_to": "установил(а) родителя"
+    },
+    "priority": {
+      "set_to": "установил(а) приоритет",
+      "none": "Нет"
+    },
+    "relates_to": {
+      "added_prefix": "отметил(а), что",
+      "added_suffix": "связан(а) с",
+      "removed": "убрал(а) связь с"
+    },
+    "blocking": {
+      "added_prefix": "отметил(а), что",
+      "added_suffix": "блокирует рабочий элемент",
+      "removed": "убрал(а) блокировку рабочего элемента"
+    },
+    "blocked_by": {
+      "added_prefix": "отметил(а), что",
+      "added_suffix": "заблокирован(а)",
+      "removed_prefix": "убрал(а)",
+      "removed_suffix": "блокировку со стороны рабочего элемента"
+    },
+    "duplicate": {
+      "added_prefix": "отметил(а)",
+      "added_suffix": "как дубликат",
+      "removed_prefix": "убрал(а)",
+      "removed_suffix": "как дубликат"
+    },
+    "state": {
+      "set_to": "установил(а) статус"
+    },
+    "start_date": {
+      "removed": "убрал(а) дату начала",
+      "set_to": "установил(а) дату начала"
+    },
+    "target_date": {
+      "removed": "убрал(а) срок",
+      "set_to": "установил(а) срок"
+    },
+    "preposition": {
+      "to": "к",
+      "from": "из",
+      "for": "для",
+      "of": "у"
+    }
   }
 }

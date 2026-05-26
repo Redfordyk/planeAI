@@ -5,7 +5,72 @@
  */
 
 import { differenceInDays, format, formatDistanceToNow, isAfter, isEqual, isValid, parseISO } from "date-fns";
+import type { Locale } from "date-fns";
+import {
+  cs,
+  de,
+  enUS,
+  es,
+  fr,
+  id,
+  it,
+  ja,
+  ko,
+  pl,
+  ptBR,
+  ro,
+  ru,
+  sk,
+  tr,
+  uk,
+  vi,
+  zhCN,
+  zhTW,
+} from "date-fns/locale";
 import { isNumber } from "lodash-es";
+
+// Maps the i18n locale codes Plane uses (see packages/i18n
+// SUPPORTED_LANGUAGES) to date-fns locale objects. Anything not in
+// the map falls back to en-US — matches the existing behaviour.
+const DATE_FNS_LOCALES: Record<string, Locale> = {
+  en: enUS,
+  "en-US": enUS,
+  fr: fr,
+  es: es,
+  ja: ja,
+  "zh-CN": zhCN,
+  "zh-TW": zhTW,
+  ru: ru,
+  it: it,
+  cs: cs,
+  sk: sk,
+  de: de,
+  ua: uk, // Plane uses "ua" but BCP-47/date-fns is "uk"
+  uk: uk,
+  pl: pl,
+  ko: ko,
+  "pt-BR": ptBR,
+  id: id,
+  ro: ro,
+  "vi-VN": vi,
+  "tr-TR": tr,
+};
+
+// Read the user's saved language from localStorage. Kept here (not
+// imported from @plane/i18n) so this package stays free of an
+// i18n-runtime dependency. Mirrors LANGUAGE_STORAGE_KEY.
+const LANGUAGE_STORAGE_KEY = "userLanguage";
+
+function getCurrentDateFnsLocale(): Locale {
+  if (typeof window === "undefined") return enUS; // SSR
+  try {
+    const lang = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    if (lang && DATE_FNS_LOCALES[lang]) return DATE_FNS_LOCALES[lang];
+  } catch {
+    // localStorage can throw in private-mode iframes; ignore.
+  }
+  return enUS;
+}
 
 // Format Date Helpers
 /**
@@ -175,7 +240,10 @@ export const calculateTimeAgo = (time: string | number | Date | null): string =>
   // return if undefined
   if (!parsedTime) return ""; // Return empty string for invalid dates
   // Format the time in the form of amount of time passed since the event happened
-  const distance = formatDistanceToNow(parsedTime, { addSuffix: true });
+  const distance = formatDistanceToNow(parsedTime, {
+    addSuffix: true,
+    locale: getCurrentDateFnsLocale(),
+  });
   return distance;
 };
 

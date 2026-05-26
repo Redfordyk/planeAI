@@ -867,5 +867,122 @@
       "description": "Export work items to a JSON file.",
       "short_description": "Export as json"
     }
+  },
+  "activity_feed": {
+    "you": "You",
+    "commented": "Commented",
+    "this_work_item": "this work item",
+    "a_work_item": "a work item",
+    "issue_link_deleted": "This work item has been deleted",
+    "from_intake_by_duplicate": " from intake by marking a duplicate work item.",
+    "updated_intake_status": "updated intake work item status.",
+    "inbox": {
+      "declined_with_issue": "declined work item",
+      "declined_no_issue": "declined this work item from intake.",
+      "snoozed_with_issue": "snoozed work item",
+      "snoozed_no_issue": "snoozed this work item.",
+      "accepted_with_issue": "accepted work item",
+      "accepted_no_issue": "accepted this work item from intake."
+    },
+    "assignees": {
+      "added": "added a new assignee",
+      "removed": "removed the assignee"
+    },
+    "archive": {
+      "restored": "restored",
+      "archived": "archived"
+    },
+    "attachment": {
+      "uploaded": "uploaded a new attachment",
+      "removed": "removed an attachment"
+    },
+    "description": {
+      "updated": "updated the description"
+    },
+    "estimate": {
+      "removed": "removed the estimate point",
+      "set_to": "set the estimate point to"
+    },
+    "issue": {
+      "created": "created",
+      "deleted": "deleted",
+      "converted_to_epic": "to an epic",
+      "converted_to_issue": "to a work item",
+      "converted_prefix": "converted"
+    },
+    "label": {
+      "added": "added a new label",
+      "removed": "removed the label"
+    },
+    "link": {
+      "added": "added this",
+      "updated": "updated the",
+      "removed": "removed this",
+      "link_word": "link"
+    },
+    "cycle": {
+      "added_prefix": "added",
+      "to_the_cycle": "to the cycle",
+      "set_to": "set the cycle to",
+      "removed_prefix": "removed",
+      "from_the_cycle": "from the cycle"
+    },
+    "module": {
+      "added_prefix": "added",
+      "to_the_module": "to the module",
+      "set_to": "set the module to",
+      "removed_prefix": "removed",
+      "from_the_module": "from the module"
+    },
+    "name": {
+      "set_to": "set the title to"
+    },
+    "parent": {
+      "removed": "removed the parent",
+      "set_to": "set the parent to"
+    },
+    "priority": {
+      "set_to": "set the priority to",
+      "none": "None"
+    },
+    "relates_to": {
+      "added_prefix": "marked that",
+      "added_suffix": "relates to",
+      "removed": "removed the relation from"
+    },
+    "blocking": {
+      "added_prefix": "marked",
+      "added_suffix": "is blocking work item",
+      "removed": "removed the blocking work item"
+    },
+    "blocked_by": {
+      "added_prefix": "marked",
+      "added_suffix": "is being blocked by",
+      "removed_prefix": "removed",
+      "removed_suffix": "being blocked by work item"
+    },
+    "duplicate": {
+      "added_prefix": "marked",
+      "added_suffix": "as duplicate of",
+      "removed_prefix": "removed",
+      "removed_suffix": "as a duplicate of"
+    },
+    "state": {
+      "set_to": "set the state to"
+    },
+    "start_date": {
+      "removed": "removed the start date",
+      "set_to": "set the start date to"
+    },
+    "target_date": {
+      "removed": "removed the due date",
+      "set_to": "set the due date to"
+    },
+    "preposition": {
+      "to": "to",
+      "from": "from",
+      "for": "for",
+      "of": "of"
+    }
   }
 }

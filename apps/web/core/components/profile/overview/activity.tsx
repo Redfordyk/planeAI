@@ -60,14 +60,14 @@ export const ProfileActivity = observer(function ProfileActivity() {
                     <p className="inline text-13 text-secondary">
                       <span className="font-medium text-primary">
                         {currentUser?.id === activity.actor_detail?.id
-                          ? "You"
+                          ? t("activity_feed.you")
                           : activity.actor_detail?.display_name}{" "}
                       </span>
                       {activity.field ? (
                         <ActivityMessage activity={activity} showIssue />
                       ) : (
                         <span>
-                          created <IssueLink activity={activity} />
+                          {t("activity_feed.issue.created")} <IssueLink activity={activity} />
                         </span>
                       )}
                     </p>
