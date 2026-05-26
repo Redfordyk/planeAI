@@ -10,7 +10,6 @@ import { BarChart } from "@plane/propel/charts/bar-chart";
 import { EmptyStateCompact } from "@plane/propel/empty-state";
 import type { IUserProfileData } from "@plane/types";
 import { Loader, Card } from "@plane/ui";
-import { capitalizeFirstLetter } from "@plane/utils";
 
 type Props = {
   userProfile: IUserProfileData | undefined;
@@ -37,7 +36,7 @@ export function ProfilePriorityDistribution({ userProfile }: Props) {
               margin={{ top: 20, right: 30, bottom: 5, left: 0 }}
               data={userProfile.priority_distribution.map((priority) => ({
                 key: priority.priority ?? "None",
-                name: capitalizeFirstLetter(priority.priority ?? "None"),
+                name: t(`common.${(priority.priority ?? "none").toLowerCase()}`),
                 count: priority.priority_count,
               }))}
               bars={[

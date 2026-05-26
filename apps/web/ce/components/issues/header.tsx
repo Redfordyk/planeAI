@@ -73,7 +73,7 @@ export const IssuesHeader = observer(function IssuesHeader() {
             <Breadcrumbs.Item
               component={
                 <BreadcrumbLink
-                  label="Work Items"
+                  label={t("common.work_items")}
                   href={`/${workspaceSlug}/projects/${projectId}/issues/`}
                   icon={<WorkItemsIcon className="h-4 w-4 text-tertiary" />}
                   isLast
