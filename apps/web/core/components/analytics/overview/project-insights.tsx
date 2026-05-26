@@ -28,6 +28,20 @@ const RadarChart = lazy(function RadarChart() {
 
 const analyticsService = new AnalyticsService();
 
+// Maps the server-returned key (advance-analytics-charts?type=projects)
+// to a `common.*` i18n key. Falls back to the API's already-titled
+// `name` for unknown keys so a future server-side addition doesn't
+// disappear from the UI.
+const PROJECT_INSIGHT_LABEL_KEYS: Record<string, string> = {
+  work_items: "common.work_items",
+  cycles: "common.cycles",
+  modules: "common.modules",
+  intake: "common.intake",
+  members: "common.members",
+  pages: "common.pages",
+  views: "common.views",
+};
+
 const ProjectInsights = observer(function ProjectInsights() {
   const params = useParams();
   const { t } = useTranslation();
@@ -35,6 +49,10 @@ const ProjectInsights = observer(function ProjectInsights() {
   const { selectedDuration, selectedDurationLabel, selectedProjects, selectedCycle, selectedModule, isPeekView } =
     useAnalytics();
 
+  const translateName = (item: { key: string; name: string }) => {
+    const k = PROJECT_INSIGHT_LABEL_KEYS[item.key];
+    return k ? t(k) : item.name;
+  };
   const { data: projectInsightsData, isLoading: isLoadingProjectInsight } = useSWR(
     `radar-chart-project-insights-${workspaceSlug}-${selectedDuration}-${selectedProjects}-${selectedCycle}-${selectedModule}-${isPeekView}`,
     () =>
@@ -72,7 +90,10 @@ const ProjectInsights = observer(function ProjectInsights() {
             <Suspense fallback={<ProjectInsightsLoader />}>
               <RadarChart
                 className="h-[350px] w-full text-accent-primary lg:w-3/5"
-                data={projectInsightsData}
+                data={projectInsightsData.map((item) => ({
+                  ...item,
+                  name: translateName(item as { key: string; name: string }),
+                }))}
                 dataKey="key"
                 radars={[
                   {
@@ -105,7 +126,7 @@ const ProjectInsights = observer(function ProjectInsights() {
               </div>
               {projectInsightsData?.map((item) => (
                 <div key={item.key} className="flex items-center justify-between text-13 text-primary">
-                  <div>{item.name}</div>
+                  <div>{translateName(item as { key: string; name: string })}</div>
                   <div className="flex items-center gap-1">
                     {/* <TrendPiece key={item.key} size='xs' /> */}
                     <div className="text-secondary">{item.count}</div>
