@@ -10,8 +10,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from ai.acl import ROLE
 from ai.agent_loop import run_agent
-from ai.models import DocumentChunk, WorkspaceAIConfig
+from ai.models import AIProjectSettings, DocumentChunk, WorkspaceAIConfig
 from ai.prompts import SEARCH_SYSTEM, build_search_messages
 from ai.search import build_context, retrieve, source_ids
 from ai.streaming import claude_sse, sse_response_headers
@@ -99,6 +100,119 @@ def _is_workspace_member(user, workspace_id) -> bool:
         is_active=True,
         deleted_at__isnull=True,
     ).exists()
+
+
+def _user_is_project_admin(user, workspace_id, project_id) -> bool:
+    """True iff `user` is an active project ADMIN, or an active
+    workspace ADMIN with any active project membership."""
+    if user is None or not getattr(user, "is_authenticated", False):
+        return False
+    ProjectMember = apps.get_model("db", "ProjectMember")
+    WorkspaceMember = apps.get_model("db", "WorkspaceMember")
+    if ProjectMember.objects.filter(
+        member=user,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        is_active=True,
+        deleted_at__isnull=True,
+        role=ROLE.ADMIN.value,
+    ).exists():
+        return True
+    is_ws_admin = WorkspaceMember.objects.filter(
+        member=user,
+        workspace_id=workspace_id,
+        is_active=True,
+        deleted_at__isnull=True,
+        role=ROLE.ADMIN.value,
+    ).exists()
+    if not is_ws_admin:
+        return False
+    return ProjectMember.objects.filter(
+        member=user,
+        workspace_id=workspace_id,
+        project_id=project_id,
+        is_active=True,
+        deleted_at__isnull=True,
+    ).exists()
+
+
+class ProjectAISettingsView(APIView):
+    """`/api/ai/workspaces/<workspace_id>/projects/<project_id>/ai-settings/`.
+
+    Per-project AI on/off switch. The toggle the frontend renders is
+    the *inverse* of `exclude_from_ai`: `ai_enabled=True` ⇔
+    `exclude_from_ai=False`. New projects have no row, which means
+    `ai_enabled=True` (AI on by default per spec).
+
+    - GET: any active workspace member.
+    - PATCH: project admin or workspace admin (with any project role).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def _project_in_workspace(self, workspace_id, project_id) -> bool:
+        Project = apps.get_model("db", "Project")
+        return Project.objects.filter(
+            id=project_id, workspace_id=workspace_id
+        ).exists()
+
+    def get(self, request, workspace_id, project_id):
+        if not _is_workspace_member(request.user, workspace_id):
+            return Response(
+                {"error": "not a workspace member"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not self._project_in_workspace(workspace_id, project_id):
+            return Response(
+                {"error": "project not in workspace"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        row = AIProjectSettings.objects.filter(project_id=project_id).first()
+        exclude = bool(row.exclude_from_ai) if row else False
+        return Response(
+            {
+                "project_id": str(project_id),
+                "workspace_id": str(workspace_id),
+                "ai_enabled": not exclude,
+                "exclude_from_ai": exclude,
+            }
+        )
+
+    def patch(self, request, workspace_id, project_id):
+        if not self._project_in_workspace(workspace_id, project_id):
+            return Response(
+                {"error": "project not in workspace"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        if not _user_is_project_admin(request.user, workspace_id, project_id):
+            return Response(
+                {"error": "admin role required to change project AI settings"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        data = request.data or {}
+        if "ai_enabled" in data:
+            exclude = not bool(data["ai_enabled"])
+        elif "exclude_from_ai" in data:
+            exclude = bool(data["exclude_from_ai"])
+        else:
+            return Response(
+                {"error": "missing 'ai_enabled' (or 'exclude_from_ai')"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        row, _ = AIProjectSettings.objects.update_or_create(
+            project_id=project_id,
+            defaults={"exclude_from_ai": exclude},
+        )
+        return Response(
+            {
+                "project_id": str(project_id),
+                "workspace_id": str(workspace_id),
+                "ai_enabled": not row.exclude_from_ai,
+                "exclude_from_ai": row.exclude_from_ai,
+            }
+        )
 
 
 class SearchView(APIView):

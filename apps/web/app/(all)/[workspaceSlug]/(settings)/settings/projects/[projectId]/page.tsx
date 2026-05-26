@@ -18,6 +18,7 @@ import { useUserPermissions } from "@/hooks/store/user";
 // local imports
 import type { Route } from "./+types/page";
 import { GeneralProjectSettingsHeader } from "./header";
+import { ProjectAIToggle } from "@/components/project/settings/ai-toggle";
 import { GeneralProjectSettingsControlSection } from "@/components/project/settings/control-section";
 
 function ProjectSettingsPage({ params }: Route.ComponentProps) {
@@ -45,6 +46,7 @@ function ProjectSettingsPage({ params }: Route.ComponentProps) {
         ) : (
           <ProjectDetailsFormLoader />
         )}
+        <ProjectAIToggle projectId={projectId} isAdmin={isAdmin} />
         {isAdmin && <GeneralProjectSettingsControlSection projectId={projectId} />}
       </div>
     </SettingsContentWrapper>

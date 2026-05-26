@@ -2,7 +2,7 @@ services:
   api:
     volumes:
       - /opt/planeAI/ai-runtime:/usr/local/lib/python3.12/site-packages/planeai_runtime:ro
-      - /opt/planeAI/ai/apps.py:/code/ai/apps.py:ro
+      - /opt/planeAI/ai:/code/ai:ro
     environment:
       - PLANEAI_DEEPSEEK_KEY=${PLANEAI_DEEPSEEK_KEY:-}
       - PLANEAI_OPENAI_KEY=${PLANEAI_OPENAI_KEY:-}
@@ -12,7 +12,7 @@ services:
   worker:
     volumes:
       - /opt/planeAI/ai-runtime:/usr/local/lib/python3.12/site-packages/planeai_runtime:ro
-      - /opt/planeAI/ai/apps.py:/code/ai/apps.py:ro
+      - /opt/planeAI/ai:/code/ai:ro
     environment:
       - PLANEAI_DEEPSEEK_KEY=${PLANEAI_DEEPSEEK_KEY:-}
       - PLANEAI_OPENAI_KEY=${PLANEAI_OPENAI_KEY:-}
@@ -22,7 +22,7 @@ services:
   beat-worker:
     volumes:
       - /opt/planeAI/ai-runtime:/usr/local/lib/python3.12/site-packages/planeai_runtime:ro
-      - /opt/planeAI/ai/apps.py:/code/ai/apps.py:ro
+      - /opt/planeAI/ai:/code/ai:ro
     environment:
       - PLANEAI_DEEPSEEK_KEY=${PLANEAI_DEEPSEEK_KEY:-}
       - PLANEAI_OPENAI_KEY=${PLANEAI_OPENAI_KEY:-}
@@ -32,7 +32,7 @@ services:
   migrator:
     volumes:
       - /opt/planeAI/ai-runtime:/usr/local/lib/python3.12/site-packages/planeai_runtime:ro
-      - /opt/planeAI/ai/apps.py:/code/ai/apps.py:ro
+      - /opt/planeAI/ai:/code/ai:ro
     environment:
       - PLANEAI_DEEPSEEK_KEY=${PLANEAI_DEEPSEEK_KEY:-}
       - PLANEAI_OPENAI_KEY=${PLANEAI_OPENAI_KEY:-}

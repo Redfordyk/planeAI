@@ -36,6 +36,7 @@ from ai.orchestrator.api import (
 from ai.views import (
     AgentExecuteView,
     IndexStatusView,
+    ProjectAISettingsView,
     SearchView,
     TranscribeView,
 )
@@ -54,6 +55,11 @@ urlpatterns = [
         "workspaces/<uuid:workspace_id>/search/",
         SearchView.as_view(),
         name="search",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/ai-settings/",
+        ProjectAISettingsView.as_view(),
+        name="project-ai-settings",
     ),
     # --- Voice + interactive agent (2026-05) ------------------------
     path(
