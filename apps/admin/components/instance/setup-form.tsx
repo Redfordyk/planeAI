@@ -64,7 +64,7 @@ export function InstanceSetupForm() {
   const lastNameParam = searchParams?.get("last_name") || undefined;
   const companyParam = searchParams?.get("company") || undefined;
   const emailParam = searchParams?.get("email") || undefined;
-  const isTelemetryEnabledParam = (searchParams?.get("is_telemetry_enabled") === "True" ? true : false) || true;
+  const isTelemetryEnabledParam = searchParams?.get("is_telemetry_enabled") === "True" ? true : false;
   const errorCode = searchParams?.get("error_code") || undefined;
   const errorMessage = searchParams?.get("error_message") || undefined;
   // state
@@ -154,7 +154,10 @@ export function InstanceSetupForm() {
             className="space-y-4"
             method="POST"
             action={`${API_BASE_URL}/api/instances/admins/sign-up/`}
-            onSubmit={() => setIsSubmitting(true)}
+            onSubmit={() => {
+              setIsSubmitting(true);
+              setTimeout(() => setIsSubmitting(false), 30000);
+            }}
             onError={() => setIsSubmitting(false)}
           >
             <input type="hidden" name="csrfmiddlewaretoken" value={csrfToken} />

@@ -23,6 +23,7 @@ from ai.models import AgentAction, PredictedRisk, WorkspaceAIConfig
 from .base import log_action
 from .breaker import ensure_agents_allowed
 from .llm import ask_text
+import html
 
 
 logger = logging.getLogger("plane.ai.orchestrator.escalator")
@@ -95,13 +96,13 @@ def escalate(risk: PredictedRisk, cfg: WorkspaceAIConfig | None = None) -> dict:
             f"⭐ Нужно решение PM"
         )
 
-    actor = getattr(issue, "created_by", None)
+    actor = None
     comment = IssueComment.objects.create(
         project_id=issue.project_id,
         issue_id=issue.id,
         actor=actor,
         comment_stripped=body[:5000],
-        comment_html=f"<p>{body[:5000]}</p>",
+        comment_html=f"<p>{html.escape(body[:5000])}</p>",
         access="INTERNAL",
     )
 
@@ -124,10 +125,14 @@ def escalate(risk: PredictedRisk, cfg: WorkspaceAIConfig | None = None) -> dict:
 def escalate_critical_risks(risk_ids: Iterable[str], cfg: WorkspaceAIConfig | None) -> dict:
     """Bulk helper: escalate a list of risk ids (typically what
     MONITOR.scan_project returned)."""
+    ids = list(risk_ids)
+    if not ids:
+        return {"escalated": 0, "skipped": 0}
+    risks = {str(r.id): r for r in PredictedRisk.objects.filter(id__in=ids)}
     escalated = []
     skipped = []
-    for rid in risk_ids:
-        risk = PredictedRisk.objects.filter(id=rid).first()
+    for rid in ids:
+        risk = risks.get(str(rid))
         if risk is None:
             continue
         out = escalate(risk, cfg=cfg)

@@ -26,6 +26,7 @@ from ai.acl import ROLE
 from ai.models import AgentAction
 from .base import log_action
 from .breaker import ensure_agents_allowed
+import html
 
 
 logger = logging.getLogger("plane.ai.orchestrator.executor")
@@ -99,14 +100,14 @@ def suggest_assignee_for(issue_id: UUID | str) -> dict:
     # Post the suggestion comment as the issue's created_by (we don't
     # spin up a synthetic agent user here; the proposal is on behalf
     # of the orchestrator and the audit row carries the rationale).
-    actor = getattr(issue, "created_by", None)
+    actor = None
     text = f"🤖 EXECUTOR предлагает назначить @{email} — {reason}"
     comment = IssueComment.objects.create(
         project_id=issue.project_id,
         issue_id=issue.id,
         actor=actor,
         comment_stripped=text,
-        comment_html=f"<p>{text}</p>",
+        comment_html=f"<p>{html.escape(text)}</p>",
         access="INTERNAL",
     )
 

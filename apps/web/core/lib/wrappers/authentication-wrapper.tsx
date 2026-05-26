@@ -25,8 +25,9 @@ type TAuthenticationWrapper = {
 };
 
 const isValidURL = (url: string): boolean => {
-  const disallowedSchemes = /^(https?|ftp):\/\//i;
-  return !disallowedSchemes.test(url);
+  // Only allow relative paths that start with / but not //
+  // Blocks javascript:, data:, //evil.com, and absolute URLs
+  return url.startsWith("/") && !url.startsWith("//");
 };
 
 export const AuthenticationWrapper = observer(function AuthenticationWrapper(props: TAuthenticationWrapper) {

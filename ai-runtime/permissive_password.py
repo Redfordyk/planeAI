@@ -62,6 +62,14 @@ _TARGET_MODULES = (
 
 def install() -> None:
     """Idempotent — calling multiple times is safe."""
+    import os
+    if not os.environ.get("PLANE_AI_RUNTIME_UNSAFE"):
+        raise RuntimeError(
+            "permissive_password: refusing to install — "
+            "set PLANE_AI_RUNTIME_UNSAFE=1 to explicitly opt in to this unsafe patch. "
+            "Never set this in production."
+        )
+    
     # Source-level patch: any module that hasn't imported zxcvbn yet
     # will pick up our replacement.
     try:

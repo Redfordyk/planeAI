@@ -54,6 +54,16 @@ export function InstanceGiteaConfigForm(props: Props) {
 
   const originURL = !isEmpty(API_BASE_URL) ? API_BASE_URL : typeof window !== "undefined" ? window.location.origin : "";
 
+  const safeGiteaSettingsHref = (() => {
+    try {
+      const u = new URL(control._formValues.GITEA_HOST || "https://gitea.com");
+      if (u.protocol !== "https:" && u.protocol !== "http:") return "https://gitea.com/user/settings/applications";
+      return `${u.origin}/user/settings/applications`;
+    } catch {
+      return "https://gitea.com/user/settings/applications";
+    }
+  })();
+
   const GITEA_FORM_FIELDS: TControllerInputFormField[] = [
     {
       key: "GITEA_HOST",
@@ -128,7 +138,7 @@ export function InstanceGiteaConfigForm(props: Props) {
           field{" "}
           <a
             tabIndex={-1}
-            href={`${control._formValues.GITEA_HOST || "https://gitea.com"}/user/settings/applications`}
+            href={safeGiteaSettingsHref}
             target="_blank"
             className="text-accent-primary hover:underline"
             rel="noreferrer"

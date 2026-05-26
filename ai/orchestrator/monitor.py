@@ -122,6 +122,7 @@ def _detect_overload(issue) -> tuple[float, str] | None:
         return None
     open_per_user = (
         Issue.objects.filter(
+            workspace_id=issue.workspace_id,
             assignees__id__in=assignees,
             deleted_at__isnull=True,
         )

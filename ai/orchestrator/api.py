@@ -22,6 +22,7 @@ import logging
 from datetime import date as date_cls
 
 from django.apps import apps
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -176,7 +177,7 @@ class GoalListCreateView(APIView):
                 }
             except Exception as exc:
                 logger.exception("planner failed on goal %s", goal.id)
-                plan_summary = {"error": f"{type(exc).__name__}: {exc}"}
+                plan_summary = {"error": "planner_failed"}
         return Response(
             {"goal": _goal_to_dict(goal), "plan_summary": plan_summary},
             status=201,
@@ -256,8 +257,8 @@ class ActivityFeedView(APIView):
             limit = min(int(request.GET.get("limit", 50)), 200)
         except (TypeError, ValueError):
             limit = 50
+        qs = qs.filter(Q(project_id__isnull=True) | Q(project_id__in=allowed))
         rows = list(qs[:limit])
-        rows = [r for r in rows if (r.project_id is None or str(r.project_id) in allowed)]
         return Response({"actions": [_action_to_dict(r) for r in rows]})
 
 
@@ -272,7 +273,8 @@ class RiskListView(APIView):
             return Response({"error": "not_a_member"}, status=403)
         allowed = set(str(p) for p in allowed_projects(request.user, workspace_id))
         qs = PredictedRisk.objects.filter(workspace_id=workspace_id, resolved=False).order_by("-created_at")
-        rows = [r for r in qs[:200] if str(r.project_id) in allowed]
+        qs = qs.filter(project_id__in=allowed)
+        rows = list(qs[:200])
         return Response({"risks": [_risk_to_dict(r) for r in rows]})
 
 
@@ -297,14 +299,13 @@ class KillSwitchView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, workspace_id):
-        if not _is_workspace_member(request.user, workspace_id):
-            return Response({"error": "not_a_member"}, status=403)
+        if not _is_ws_admin(request.user, workspace_id):
+            return Response({"error": "admin_required"}, status=403)
         cfg = WorkspaceAIConfig.objects.filter(workspace_id=workspace_id).only(
-            "agents_killed", "max_agent_actions_per_hour"
+            "agents_killed"
         ).first()
         return Response({
             "engaged": bool(cfg and cfg.agents_killed),
-            "max_agent_actions_per_hour": cfg.max_agent_actions_per_hour if cfg else None,
         })
 
     def post(self, request, workspace_id):
@@ -374,6 +375,8 @@ class TriggerAnalystView(APIView):
             days = int(request.data.get("days", 30))
         except (TypeError, ValueError):
             return Response({"error": "days must be int"}, status=400)
+        if days < 1 or days > 365:
+            return Response({"error": "days must be between 1 and 365"}, status=400)
         project_id = request.data.get("project_id")
         try:
             result = analyst.generate_insight(

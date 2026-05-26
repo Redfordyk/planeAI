@@ -121,7 +121,11 @@ export function InstanceSignInForm() {
             className="space-y-4"
             method="POST"
             action={`${API_BASE_URL}/api/instances/admins/sign-in/`}
-            onSubmit={() => setIsSubmitting(true)}
+            onSubmit={() => {
+              setIsSubmitting(true);
+              // Safety net: reset after 30s if no redirect occurred (server error path)
+              setTimeout(() => setIsSubmitting(false), 30000);
+            }}
             onError={() => setIsSubmitting(false)}
           >
             {errorData.type && errorData?.message ? (

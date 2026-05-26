@@ -23,6 +23,20 @@ export abstract class APIService {
   }
 
   private setupInterceptors() {
+    this.axiosInstance.interceptors.request.use((config) => {
+      const method = (config.method || "").toLowerCase();
+      if (["post", "put", "patch", "delete"].includes(method)) {
+        const csrfToken = document.cookie
+          .split("; ")
+          .find((row) => row.startsWith("csrftoken="))
+          ?.split("=")[1];
+        if (csrfToken) {
+          config.headers["X-CSRFToken"] = csrfToken;
+        }
+      }
+      return config;
+    });
+
     this.axiosInstance.interceptors.response.use(
       (response) => response,
       (error) => {

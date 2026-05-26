@@ -14,11 +14,8 @@ WORKDIR /code
 #    sys.path via manage.py / asgi.py.
 COPY ai/ /code/ai/
 
-# pytest configuration (DJANGO_SETTINGS_MODULE for pytest-django,
 # --reuse-db so we don't re-run Plane's full migration set per test
-# session). Goes to /code so `cd /code && pytest` finds it via the
 # default discovery rules.
-COPY pytest.ini /code/pytest.ini
 
 # 2. A settings shim that does `from .production import *` and appends
 #    `ai` to INSTALLED_APPS. We point DJANGO_SETTINGS_MODULE at it via
@@ -37,9 +34,6 @@ RUN pip install --no-cache-dir \
     anthropic==0.39.0 \
     tiktoken==0.8.0 \
     django-encrypted-model-fields==0.6.5 \
-    pytest==8.3.4 \
-    pytest-django==4.9.0 \
-    pytest-asyncio==0.24.0
 
 # Default settings module — overridable per-service via env.
 ENV DJANGO_SETTINGS_MODULE=plane.settings.production_ai

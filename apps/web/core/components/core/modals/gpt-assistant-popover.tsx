@@ -22,6 +22,20 @@ import { RichTextEditor } from "@/components/editor/rich-text";
 import { AIService } from "@/services/ai.service";
 const aiService = new AIService();
 
+function sanitizeAiHtml(dirty: string): string {
+  if (typeof window === "undefined") return "";
+  const doc = new DOMParser().parseFromString(dirty, "text/html");
+  doc.querySelectorAll("script, iframe, object, embed, link, meta").forEach((el) => el.remove());
+  doc.querySelectorAll("*").forEach((el) => {
+    Array.from(el.attributes).forEach((attr) => {
+      if (attr.name.toLowerCase().startsWith("on") || attr.value.toLowerCase().startsWith("javascript:")) {
+        el.removeAttribute(attr.name);
+      }
+    });
+  });
+  return doc.body.innerHTML;
+}
+
 type Props = {
   isOpen: boolean;
   handleClose: () => void;
@@ -111,7 +125,7 @@ export function GptAssistantPopover(props: Props) {
         task: formData.task,
       });
 
-      setResponse(res.response_html);
+      setResponse(sanitizeAiHtml(res.response_html));
       setFocus("task");
 
       setInvalidResponse(res.response === "");

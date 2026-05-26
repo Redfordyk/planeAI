@@ -24,7 +24,6 @@ on:
 
 permissions:
   contents: read
-  packages: write   # for ghcr.io push on main
 
 concurrency:
   group: planeai-ci-${{ github.ref }}
@@ -161,6 +160,8 @@ jobs:
     needs: [lint, smoke]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/preview')
     runs-on: ubuntu-latest
+    permissions:
+      packages: write
     steps:
       - uses: actions/checkout@v4
 

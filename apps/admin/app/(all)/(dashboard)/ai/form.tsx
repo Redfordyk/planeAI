@@ -32,7 +32,7 @@ export function InstanceAIForm(props: IInstanceAIForm) {
     formState: { errors, isSubmitting },
   } = useForm<AIFormValues>({
     defaultValues: {
-      LLM_API_KEY: config["LLM_API_KEY"],
+      LLM_API_KEY: "",
       LLM_MODEL: config["LLM_MODEL"],
     },
   });
@@ -76,7 +76,7 @@ export function InstanceAIForm(props: IInstanceAIForm) {
           </a>
         </>
       ),
-      placeholder: "sk-asddassdfasdefqsdfasd23das3dasdcasd",
+      placeholder: config["LLM_API_KEY"] ? "••••••••••••• (saved)" : "sk-...",
       error: Boolean(errors.LLM_API_KEY),
       required: false,
     },
@@ -84,6 +84,9 @@ export function InstanceAIForm(props: IInstanceAIForm) {
 
   const onSubmit = async (formData: AIFormValues) => {
     const payload: Partial<AIFormValues> = { ...formData };
+    // Don't send the key if the user left it blank (write-only pattern:
+    // empty means "no change", so we never read back the real key)
+    if (!payload.LLM_API_KEY) delete payload.LLM_API_KEY;
 
     await updateInstanceConfigurations(payload)
       .then(() =>

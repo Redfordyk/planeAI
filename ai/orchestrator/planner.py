@@ -162,7 +162,10 @@ def _build_user_prompt(goal: ProjectGoal) -> str:
     if constraints:
         lines += ["", "Ограничения / контекст:"]
         for k, v in constraints.items():
-            lines.append(f"- {k}: {v}")
+            # Sanitize: strip newlines and cap length to prevent prompt injection
+            safe_k = str(k).replace("\n", " ").replace("\r", " ")[:100]
+            safe_v = str(v).replace("\n", " ").replace("\r", " ")[:500]
+            lines.append(f"- {safe_k}: {safe_v}")
     lines += ["", "Сгенерируй план задач в виде JSON по описанной схеме."]
     return "\n".join(lines)
 
