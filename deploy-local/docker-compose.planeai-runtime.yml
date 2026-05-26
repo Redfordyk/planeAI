@@ -1,0 +1,41 @@
+services:
+  api:
+    volumes:
+      - /opt/planeAI/ai-runtime:/usr/local/lib/python3.12/site-packages/planeai_runtime:ro
+      - /opt/planeAI/ai/apps.py:/code/ai/apps.py:ro
+    environment:
+      - PLANEAI_DEEPSEEK_KEY=${PLANEAI_DEEPSEEK_KEY:-}
+      - PLANEAI_OPENAI_KEY=${PLANEAI_OPENAI_KEY:-}
+      - PLANEAI_CHAT_MODEL=${PLANEAI_CHAT_MODEL:-deepseek-v4-flash}
+      - PLANEAI_EMBED_MODEL=${PLANEAI_EMBED_MODEL:-text-embedding-3-small}
+      - PLANEAI_MONTHLY_TOKEN_BUDGET=${PLANEAI_MONTHLY_TOKEN_BUDGET:-5000000}
+  worker:
+    volumes:
+      - /opt/planeAI/ai-runtime:/usr/local/lib/python3.12/site-packages/planeai_runtime:ro
+      - /opt/planeAI/ai/apps.py:/code/ai/apps.py:ro
+    environment:
+      - PLANEAI_DEEPSEEK_KEY=${PLANEAI_DEEPSEEK_KEY:-}
+      - PLANEAI_OPENAI_KEY=${PLANEAI_OPENAI_KEY:-}
+      - PLANEAI_CHAT_MODEL=${PLANEAI_CHAT_MODEL:-deepseek-v4-flash}
+      - PLANEAI_EMBED_MODEL=${PLANEAI_EMBED_MODEL:-text-embedding-3-small}
+      - PLANEAI_MONTHLY_TOKEN_BUDGET=${PLANEAI_MONTHLY_TOKEN_BUDGET:-5000000}
+  beat-worker:
+    volumes:
+      - /opt/planeAI/ai-runtime:/usr/local/lib/python3.12/site-packages/planeai_runtime:ro
+      - /opt/planeAI/ai/apps.py:/code/ai/apps.py:ro
+    environment:
+      - PLANEAI_DEEPSEEK_KEY=${PLANEAI_DEEPSEEK_KEY:-}
+      - PLANEAI_OPENAI_KEY=${PLANEAI_OPENAI_KEY:-}
+      - PLANEAI_CHAT_MODEL=${PLANEAI_CHAT_MODEL:-deepseek-v4-flash}
+      - PLANEAI_EMBED_MODEL=${PLANEAI_EMBED_MODEL:-text-embedding-3-small}
+      - PLANEAI_MONTHLY_TOKEN_BUDGET=${PLANEAI_MONTHLY_TOKEN_BUDGET:-5000000}
+  migrator:
+    volumes:
+      - /opt/planeAI/ai-runtime:/usr/local/lib/python3.12/site-packages/planeai_runtime:ro
+      - /opt/planeAI/ai/apps.py:/code/ai/apps.py:ro
+    environment:
+      - PLANEAI_DEEPSEEK_KEY=${PLANEAI_DEEPSEEK_KEY:-}
+      - PLANEAI_OPENAI_KEY=${PLANEAI_OPENAI_KEY:-}
+      - PLANEAI_CHAT_MODEL=${PLANEAI_CHAT_MODEL:-deepseek-v4-flash}
+      - PLANEAI_EMBED_MODEL=${PLANEAI_EMBED_MODEL:-text-embedding-3-small}
+      - PLANEAI_MONTHLY_TOKEN_BUDGET=${PLANEAI_MONTHLY_TOKEN_BUDGET:-5000000}

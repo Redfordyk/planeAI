@@ -17,19 +17,32 @@ class AiConfig(AppConfig):
         signals.connect()
 
         # planeAI runtime overlays (bind-mounted from /opt/planeAI/
-        # ai-runtime into site-packages/planeai_runtime). Each
-        # overlay's install() must be idempotent. We swallow errors so
-        # a missing overlay can never block app boot — the platform
-        # has to keep starting even if a relaxation patch is gone.
-        try:
-            from planeai_runtime import permissive_password
+        # ai-runtime into site-packages/planeai_runtime). Each entry
+        # below is (module_name, attr_name) where attr_name is the
+        # overlay's idempotent activation function ("install" or
+        # "connect"). Errors are swallowed per-overlay so a missing
+        # or broken patch can never block app boot.
+        import logging
 
-            permissive_password.install()
-        except Exception:  # noqa: BLE001
-            import logging
+        log = logging.getLogger("plane.ai.apps")
 
-            logging.getLogger("plane.ai.apps").warning(
-                "permissive_password overlay missing or failed; signup will keep "
-                "the upstream zxcvbn strength check",
-                exc_info=True,
-            )
+        overlays = (
+            ("permissive_password", "install"),
+            ("openai_embed_fix", "install"),
+            ("deepseek_chat", "install"),
+            ("autoconfig_workspace", "connect"),
+            ("auto_verify_email", "connect"),
+        )
+        for mod_name, attr in overlays:
+            try:
+                import importlib
+
+                mod = importlib.import_module(f"planeai_runtime.{mod_name}")
+                getattr(mod, attr)()
+            except Exception:  # noqa: BLE001
+                log.warning(
+                    "runtime overlay %s.%s missing or failed",
+                    mod_name,
+                    attr,
+                    exc_info=True,
+                )
