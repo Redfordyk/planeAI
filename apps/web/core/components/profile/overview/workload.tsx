@@ -35,7 +35,7 @@ export function ProfileWorkload({ stateDistribution }: Props) {
                 />
                 <div className="flex-col space-y-1">
                   <span className="text-13 text-placeholder">
-                    {t(`workspace.state.${group.state_group}`)}
+                    {t(`workspace_projects.state.${group.state_group}`)}
                   </span>
                   <p className="text-18 font-semibold">{group.state_count}</p>
                 </div>

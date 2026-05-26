@@ -69,7 +69,7 @@ export function ProfileStateDistribution({ stateDistribution, userProfile }: Pro
                             STATE_GROUPS[group.state_group]?.color ?? "var(--background-color-accent-primary)",
                         }}
                       />
-                      <div className="whitespace-nowrap">{t(`workspace.state.${group.state_group}`)}</div>
+                      <div className="whitespace-nowrap">{t(`workspace_projects.state.${group.state_group}`)}</div>
                     </div>
                     <div>{group.state_count}</div>
                   </div>
