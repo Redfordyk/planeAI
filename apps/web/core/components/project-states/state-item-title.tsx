@@ -9,10 +9,12 @@ import { observer } from "mobx-react";
 import { GripVertical } from "lucide-react";
 import { EIconSize, STATE_TRACKER_ELEMENTS } from "@plane/constants";
 // plane imports
+import { useTranslation } from "@plane/i18n";
 import { EditIcon, StateGroupIcon } from "@plane/propel/icons";
 import type { IState, TStateOperationsCallbacks } from "@plane/types";
 // local imports
 import { useProjectState } from "@/hooks/store/use-project-state";
+import { translateStateName } from "@/lib/state-name";
 import { StateDelete, StateMarksAsDefault } from "./options";
 
 type TBaseStateItemTitleProps = {
@@ -36,6 +38,7 @@ export type TStateItemTitleProps = TEnabledStateItemTitleProps | TDisabledStateI
 
 export const StateItemTitle = observer(function StateItemTitle(props: TStateItemTitleProps) {
   const { stateCount, setUpdateStateModal, disabled, state, shouldShowDescription = true } = props;
+  const { t } = useTranslation();
   // store hooks
   const { getStatePercentageInGroup } = useProjectState();
   // derived values
@@ -57,7 +60,7 @@ export const StateItemTitle = observer(function StateItemTitle(props: TStateItem
         </div>
         {/* state title and description */}
         <div className="min-h-5 px-2 text-13">
-          <h6 className="text-13 font-medium">{state.name}</h6>
+          <h6 className="text-13 font-medium">{translateStateName(state.name, t)}</h6>
           {shouldShowDescription && <p className="text-11 text-secondary">{state.description}</p>}
         </div>
       </div>

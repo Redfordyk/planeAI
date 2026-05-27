@@ -8,6 +8,7 @@
 
 import { observer } from "mobx-react";
 // plane imports
+import { useTranslation } from "@plane/i18n";
 import { ToggleSwitch } from "@plane/ui";
 // components
 import { SettingsBoxedControlItem } from "@/components/settings/boxed-control-item";
@@ -22,6 +23,7 @@ type Props = {
 
 export const ProjectAIToggle = observer(function ProjectAIToggle(props: Props) {
   const { projectId, isAdmin } = props;
+  const { t } = useTranslation();
   const { currentWorkspace } = useWorkspace();
   const workspaceId = currentWorkspace?.id;
   const { aiEnabled, loading, saving, error, setAIEnabled } = useProjectAISettings(
@@ -31,14 +33,12 @@ export const ProjectAIToggle = observer(function ProjectAIToggle(props: Props) {
 
   const value = aiEnabled === null ? false : aiEnabled;
   const disabled = !isAdmin || loading || saving || aiEnabled === null;
-  const description = error
-    ? `AI: ${error}`
-    : "When off, this project is excluded from search, the agent, and the orchestrator. Existing indexed content is purged.";
+  const description = error ? `AI: ${error}` : t("project_settings.ai_toggle.description");
 
   return (
     <div className="mt-10">
       <SettingsBoxedControlItem
-        title="AI"
+        title={t("project_settings.ai_toggle.title")}
         description={description}
         control={
           <ToggleSwitch

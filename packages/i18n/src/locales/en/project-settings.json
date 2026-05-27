@@ -18,6 +18,11 @@
         "error": "Project could not be updated. Please try again."
       }
     },
+    "page_title": "Project settings",
+    "ai_toggle": {
+      "title": "AI",
+      "description": "When off, this project is excluded from search, the agent, and the orchestrator. Existing indexed content is purged."
+    },
     "members": {
       "label": "Members",
       "project_lead": "Project lead",
