@@ -23,12 +23,19 @@ export const ReadonlyPriority = observer(function ReadonlyPriority(props: TReado
   const { className, hideIcon = false, value, placeholder } = props;
 
   const { t } = useTranslation();
-  const priorityDetails = ISSUE_PRIORITIES.find((p) => p.key === value);
+  // ISSUE_PRIORITIES still imported so we narrow `value` to a valid
+  // key before looking up the translation (and silently fall back to
+  // common.none for any unexpected/empty value).
+  const validKey = value && ISSUE_PRIORITIES.find((p) => p.key === value)?.key;
+  const label =
+    !validKey || validKey === "none"
+      ? (placeholder ?? t("common.none"))
+      : t(`issue.priority.${validKey}`);
 
   return (
     <div className={cn("flex items-center gap-1 text-body-xs-regular", className)}>
       {!hideIcon && <PriorityIcon priority={value ?? "none"} size={12} className="flex-shrink-0" withContainer />}
-      <span className="flex-grow truncate">{priorityDetails?.title ?? placeholder ?? t("common.none")}</span>
+      <span className="flex-grow truncate">{label}</span>
     </div>
   );
 });

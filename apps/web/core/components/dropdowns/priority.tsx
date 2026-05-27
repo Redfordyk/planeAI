@@ -27,6 +27,16 @@ import { BACKGROUND_BUTTON_VARIANTS, BORDER_BUTTON_VARIANTS, BUTTON_VARIANTS_WIT
 // types
 import type { TDropdownProps } from "./types";
 
+// ISSUE_PRIORITIES.title is hardcoded English in @plane/constants
+// (the package can't depend on i18n). Translate at render time via
+// this helper — `none` doesn't have an issue.priority.* key, so it
+// falls through to common.none.
+type TFunc = (key: string, params?: Record<string, unknown>) => string;
+function translatePriority(key: string | null | undefined, t: TFunc): string {
+  if (!key || key === "none") return t("common.none");
+  return t(`issue.priority.${key}`);
+}
+
 type Props = TDropdownProps & {
   button?: ReactNode;
   dropdownArrow?: boolean;
@@ -82,7 +92,7 @@ function BorderButton(props: ButtonProps) {
   return (
     <Tooltip
       tooltipHeading={t("priority")}
-      tooltipContent={priorityDetails?.title ?? t("common.none")}
+      tooltipContent={translatePriority(priority, t)}
       disabled={!showTooltip}
       isMobile={isMobile}
       renderByDefault={renderToolTipByDefault}
@@ -132,7 +142,7 @@ function BorderButton(props: ButtonProps) {
               "text-placeholder": !priority || priority === "none",
             })}
           >
-            {priorityDetails?.title ?? placeholder}
+            {priority ? translatePriority(priority, t) : placeholder}
           </span>
         )}
         {dropdownArrow && (
@@ -223,7 +233,7 @@ function BackgroundButton(props: ButtonProps) {
               "text-placeholder": !priority || priority === "none",
             })}
           >
-            {priorityDetails?.title ?? t("common.priority") ?? placeholder}
+            {priority ? translatePriority(priority, t) : (placeholder ?? t("common.priority"))}
           </span>
         )}
         {dropdownArrow && (
@@ -257,7 +267,7 @@ function TransparentButton(props: ButtonProps) {
   return (
     <Tooltip
       tooltipHeading={t("priority")}
-      tooltipContent={priorityDetails?.title ?? t("common.none")}
+      tooltipContent={translatePriority(priority, t)}
       disabled={!showTooltip}
       isMobile={isMobile}
       renderByDefault={renderToolTipByDefault}
@@ -307,7 +317,7 @@ function TransparentButton(props: ButtonProps) {
               "text-placeholder": !priority || priority === "none",
             })}
           >
-            {priorityDetails?.title ?? t("common.priority") ?? placeholder}
+            {priority ? translatePriority(priority, t) : (placeholder ?? t("common.priority"))}
           </span>
         )}
         {dropdownArrow && (
@@ -363,16 +373,21 @@ export function PriorityDropdown(props: Props) {
     ],
   });
 
-  const options = ISSUE_PRIORITIES.map((priority) => ({
-    value: priority.key,
-    query: priority.key,
-    content: (
-      <div className="flex items-center gap-2">
-        <PriorityIcon priority={priority.key} size={14} withContainer />
-        <span className="flex-grow truncate">{priority.title}</span>
-      </div>
-    ),
-  }));
+  const options = ISSUE_PRIORITIES.map((priority) => {
+    const label = translatePriority(priority.key, t);
+    return {
+      value: priority.key,
+      // include both the English key and the localised label in the
+      // searchable text so a user can type either "low" or "низкий".
+      query: `${priority.key} ${label}`,
+      content: (
+        <div className="flex items-center gap-2">
+          <PriorityIcon priority={priority.key} size={14} withContainer />
+          <span className="flex-grow truncate">{label}</span>
+        </div>
+      ),
+    };
+  });
 
   const filteredOptions =
     query === "" ? options : options.filter((o) => o.query.toLowerCase().includes(query.toLowerCase()));

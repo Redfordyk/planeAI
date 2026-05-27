@@ -18,6 +18,9 @@ export type { TNamespace } from "./constants/namespaces";
 
 // Utilities
 export { setLanguage } from "./core/set-language";
+// Non-React access to translations (use sparingly — prefer useTranslation
+// in components so the hook re-renders on language change).
+export { i18nInstance } from "./core/instance";
 
 // Constants
 export { FALLBACK_LANGUAGE, SUPPORTED_LANGUAGES, LANGUAGE_STORAGE_KEY } from "./constants/language";

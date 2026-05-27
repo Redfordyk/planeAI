@@ -10,6 +10,7 @@ import { clone, isNil, pull, uniq, concat } from "lodash-es";
 import scrollIntoView from "smooth-scroll-into-view-if-needed";
 // plane types
 import { EIconSize, ISSUE_PRIORITIES, STATE_GROUPS } from "@plane/constants";
+import { i18nInstance } from "@plane/i18n";
 import { Logo } from "@plane/propel/emoji-icon-picker";
 import type { ISvgIcons } from "@plane/propel/icons";
 import { CycleGroupIcon, CycleIcon, ModuleIcon, PriorityIcon, StateGroupIcon } from "@plane/propel/icons";
@@ -242,10 +243,14 @@ const getStateGroupColumns = (): IGroupByColumn[] => {
 
 const getPriorityColumns = (): IGroupByColumn[] => {
   const priorities = ISSUE_PRIORITIES;
-  // map priorities to group by columns
+  // This util is invoked outside a React component, so we use the
+  // global i18nInstance directly — at the cost of NOT re-rendering
+  // the kanban headers when the user flips language without a route
+  // change. Acceptable trade-off; language switches are rare.
+  const t = i18nInstance.t.bind(i18nInstance) as (k: string) => string;
   return priorities.map((priority) => ({
     id: priority.key,
-    name: priority.title,
+    name: priority.key === "none" ? t("common.none") : t(`issue.priority.${priority.key}`),
     icon: <PriorityIcon priority={priority?.key} />,
     payload: { priority: priority.key },
   }));

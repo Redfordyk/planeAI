@@ -39,7 +39,9 @@ export const InboxIssueAppliedFiltersPriority = observer(function InboxIssueAppl
             <div className="relative flex h-3 w-3 flex-shrink-0 items-center justify-center overflow-hidden">
               <PriorityIcon priority={optionDetail.key} className="h-3 w-3" />
             </div>
-            <div className="truncate text-11">{optionDetail?.title}</div>
+            <div className="truncate text-11">
+              {optionDetail.key === "none" ? t("common.none") : t(`issue.priority.${optionDetail.key}`)}
+            </div>
             <div
               className="relative flex h-3 w-3 flex-shrink-0 cursor-pointer items-center justify-center overflow-hidden text-tertiary transition-all hover:text-secondary"
               onClick={() => handleInboxIssueFilters("priority", handleFilterValue(optionDetail?.key))}

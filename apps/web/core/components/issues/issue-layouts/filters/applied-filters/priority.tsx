@@ -7,6 +7,7 @@
 import { observer } from "mobx-react";
 
 // icons
+import { useTranslation } from "@plane/i18n";
 import { CloseIcon, PriorityIcon } from "@plane/propel/icons";
 import type { TIssuePriorities } from "@plane/types";
 // types
@@ -19,13 +20,14 @@ type Props = {
 
 export const AppliedPriorityFilters = observer(function AppliedPriorityFilters(props: Props) {
   const { handleRemove, values, editable } = props;
+  const { t } = useTranslation();
 
   return (
     <>
       {values.map((priority) => (
         <div key={priority} className="flex items-center gap-1 rounded-sm bg-layer-1 p-1 text-11">
           <PriorityIcon priority={priority as TIssuePriorities} className={`h-3 w-3`} />
-          {priority}
+          {priority === "none" ? t("common.none") : t(`issue.priority.${priority}`)}
           {editable && (
             <button
               type="button"
