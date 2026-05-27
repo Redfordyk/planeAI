@@ -91,13 +91,17 @@ export const renderFormattedDate = (
   if (!parsedDate) return;
   // Check if the parsed date is valid before formatting
   if (!isValid(parsedDate)) return; // Return null for invalid dates
+  // date-fns format() reads month/weekday names from the `locale`
+  // option — without it everything is en-US. Same locale lookup as
+  // calculateTimeAgo.
+  const opts = { locale: getCurrentDateFnsLocale() };
   let formattedDate;
   try {
     // Format the date in the format provided or default format (MMM dd, yyyy)
-    formattedDate = format(parsedDate, formatToken);
+    formattedDate = format(parsedDate, formatToken, opts);
   } catch (_e) {
     // Format the date in format (MMM dd, yyyy) in case of any error
-    formattedDate = format(parsedDate, "MMM dd, yyyy");
+    formattedDate = format(parsedDate, "MMM dd, yyyy", opts);
   }
   return formattedDate;
 };

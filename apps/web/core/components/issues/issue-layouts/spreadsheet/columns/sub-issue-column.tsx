@@ -8,6 +8,7 @@ import React from "react";
 import { observer } from "mobx-react";
 import { useParams } from "next/navigation";
 // types
+import { useTranslation } from "@plane/i18n";
 import type { TIssue } from "@plane/types";
 // helpers
 import { Row } from "@plane/ui";
@@ -22,6 +23,7 @@ type Props = {
 
 export const SpreadsheetSubIssueColumn = observer(function SpreadsheetSubIssueColumn(props: Props) {
   const { issue } = props;
+  const { t } = useTranslation();
   // router
   const router = useAppRouter();
   // hooks
@@ -36,7 +38,7 @@ export const SpreadsheetSubIssueColumn = observer(function SpreadsheetSubIssueCo
     );
   };
 
-  const label = `${subIssueCount} sub-work item${subIssueCount !== 1 ? "s" : ""}`;
+  const label = t("sub_work_item_count", { count: subIssueCount });
 
   return (
     <Row
