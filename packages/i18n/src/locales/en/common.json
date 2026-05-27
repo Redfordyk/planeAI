@@ -992,5 +992,16 @@
       "for": "for",
       "of": "of"
     }
+  },
+  "summarize": {
+    "button_tooltip": "Summarize this work item",
+    "modal_title": "Work item summary",
+    "from_cache": "from cache",
+    "generating": "Generating summary…",
+    "empty": "Nothing to summarize.",
+    "generic_error": "Could not generate the summary. Please try again.",
+    "model_label": "Model",
+    "copy": "Copy",
+    "regenerate": "Regenerate"
   }
 }

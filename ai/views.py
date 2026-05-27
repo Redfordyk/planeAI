@@ -12,8 +12,19 @@ from rest_framework.views import APIView
 
 from ai.acl import ROLE
 from ai.agent_loop import run_agent
-from ai.models import AIProjectSettings, DocumentChunk, WorkspaceAIConfig
-from ai.prompts import SEARCH_SYSTEM, build_search_messages
+from ai.models import (
+    AIProjectSettings,
+    AIUsageLog,
+    DocumentChunk,
+    IssueSummary,
+    WorkspaceAIConfig,
+)
+from ai.prompts import (
+    SEARCH_SYSTEM,
+    SUMMARIZE_SYSTEM,
+    build_search_messages,
+    build_summarize_messages,
+)
 from ai.search import build_context, retrieve, source_ids
 from ai.streaming import claude_sse, sse_response_headers
 from ai.transcribe import transcribe_audio
@@ -316,6 +327,255 @@ def _load_cfg(workspace_id):
         .only("anthropic_key", "openai_key", "chat_model", "embed_model", "monthly_token_budget")
         .first()
     )
+
+
+class SummarizeIssueView(APIView):
+    """``POST /api/ai/workspaces/<workspace_id>/issues/<issue_id>/summarize/``.
+
+    Streams an AI summary of one work item (title + description +
+    every comment) as SSE. First frame is either
+    ``{"cached": true, "summary": "...", "updated_at": "...", "model": "..."}``
+    or ``{"cached": false}`` followed by ``{"delta": "..."}`` frames
+    and a closing ``{"done": true, "usage": {...}}``.
+
+    Pass ``{"force": true}`` in the body to bypass the content-hash
+    cache (used by the UI "Regenerate" button).
+
+    ACL: caller must be (a) a workspace member, (b) have read access
+    to the project (any ProjectMember role), and (c) the project must
+    not be flagged ``exclude_from_ai``. Standard AI budget gate.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, workspace_id, issue_id):
+        import hashlib
+        import logging
+
+        logger = logging.getLogger("plane.ai.summarize")
+
+        force = bool((request.data or {}).get("force"))
+        user = request.user
+
+        # --- gates ----------------------------------------------------
+        cfg = _load_cfg(workspace_id)
+        if cfg is None:
+            return Response(
+                {"error": "AI disabled for this workspace"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if not _is_workspace_member(user, workspace_id):
+            return Response(
+                {"error": "not a workspace member"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        used = tokens_used_this_month(workspace_id)
+        if used >= cfg.monthly_token_budget:
+            return Response(
+                {
+                    "error": "Monthly AI budget exceeded",
+                    "used_tokens": used,
+                    "budget_tokens": cfg.monthly_token_budget,
+                },
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+
+        # --- fetch the work item + access check via ProjectMember ----
+        Issue = apps.get_model("db", "Issue")
+        issue = (
+            Issue.objects.filter(
+                id=issue_id,
+                workspace_id=workspace_id,
+                deleted_at__isnull=True,
+            )
+            .only("id", "name", "description_stripped", "project_id", "workspace_id")
+            .first()
+        )
+        if issue is None:
+            return Response(
+                {"error": "work item not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        ProjectMember = apps.get_model("db", "ProjectMember")
+        has_access = ProjectMember.objects.filter(
+            member=user,
+            project_id=issue.project_id,
+            workspace_id=workspace_id,
+            is_active=True,
+            deleted_at__isnull=True,
+        ).exists()
+        if not has_access:
+            return Response(
+                {"error": "no access to this work item"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Project-level AI opt-out (TZ 3.4): respect exclude_from_ai.
+        excluded = AIProjectSettings.objects.filter(
+            project_id=issue.project_id, exclude_from_ai=True
+        ).exists()
+        if excluded:
+            return Response(
+                {"error": "AI is disabled for this project"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # --- gather content ------------------------------------------
+        IssueComment = apps.get_model("db", "IssueComment")
+        comments_qs = (
+            IssueComment.objects.filter(
+                issue_id=issue_id,
+                workspace_id=workspace_id,
+                deleted_at__isnull=True,
+            )
+            .order_by("created_at")
+            .only("id", "comment_stripped", "created_at")
+        )
+        comments: list[tuple[str, str]] = [
+            (str(c.id), c.comment_stripped or "") for c in comments_qs
+        ]
+
+        title = issue.name or ""
+        description = issue.description_stripped or ""
+
+        # --- cache check (content hash) -------------------------------
+        hasher = hashlib.sha256()
+        hasher.update(title.encode("utf-8"))
+        hasher.update(b"\x00")
+        hasher.update(description.encode("utf-8"))
+        for cid, text in comments:
+            hasher.update(b"\x00")
+            hasher.update(cid.encode("utf-8"))
+            hasher.update(b"\x00")
+            hasher.update((text or "").encode("utf-8"))
+        content_hash = hasher.hexdigest()
+
+        if not force:
+            cached = (
+                IssueSummary.objects.filter(issue_id=issue_id, content_hash=content_hash)
+                .only("summary_text", "updated_at", "model_used")
+                .first()
+            )
+            if cached is not None:
+                def cached_iter():
+                    yield _sse_frame(
+                        {
+                            "cached": True,
+                            "summary": cached.summary_text,
+                            "updated_at": cached.updated_at.isoformat(),
+                            "model": cached.model_used,
+                        }
+                    )
+                    yield _sse_frame({"done": True, "usage": {"input_tokens": 0, "output_tokens": 0}})
+
+                response = StreamingHttpResponse(
+                    cached_iter(), content_type="text/event-stream"
+                )
+                for header, value in sse_response_headers().items():
+                    response[header] = value
+                return response
+
+        # Reject summarize requests when there's nothing to summarize.
+        if not title and not description and not any(t for _, t in comments):
+            return Response(
+                {"error": "work item is empty — nothing to summarize"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # --- stream + persist on completion ---------------------------
+        messages = build_summarize_messages(title, description, comments)
+        # Trim absurdly large payloads to protect the LLM context.
+        # 30k chars ~ 8k tokens, well under any chat model's limit.
+        MAX_CHARS = 30_000
+        if len(messages[0]["content"]) > MAX_CHARS:
+            messages[0]["content"] = (
+                messages[0]["content"][:MAX_CHARS]
+                + "\n\n[…truncated for length…]"
+            )
+
+        async_gen = claude_sse(
+            cfg=cfg,
+            system=SUMMARIZE_SYSTEM,
+            messages=messages,
+            sources=[],
+            workspace_id=workspace_id,
+            user_id=user.id,
+            feature=AIUsageLog.FEATURE_SUMMARIZE,
+            # Modest cap — summary should be 5-8 sentences.
+            max_tokens=600,
+            temperature=0.2,
+        )
+
+        # Buffer the streamed deltas so we can persist the final
+        # summary; mirrors SearchView's sync-iter pattern.
+        collected_text: list[str] = []
+        chosen_model_used: list[str] = [cfg.chat_model]
+        final_usage_tokens: dict[str, int] = {"input_tokens": 0, "output_tokens": 0}
+
+        def sync_iter():
+            from asgiref.sync import async_to_sync
+            import json as _json
+
+            ait = async_gen.__aiter__()
+            anext_call = async_to_sync(ait.__anext__)
+            yield _sse_frame({"cached": False, "model": chosen_model_used[0]})
+            while True:
+                try:
+                    raw = anext_call()
+                except StopAsyncIteration:
+                    break
+                # raw is a string like "data: {...}\n\n" — parse it
+                # back to capture deltas and the done frame.
+                try:
+                    body_line = raw.split("\n", 1)[0]
+                    if body_line.startswith("data:"):
+                        payload = _json.loads(body_line[len("data:"):].strip())
+                        if "delta" in payload:
+                            collected_text.append(payload["delta"])
+                        elif "done" in payload and isinstance(payload.get("usage"), dict):
+                            final_usage_tokens.update(
+                                {
+                                    "input_tokens": payload["usage"].get("input_tokens", 0),
+                                    "output_tokens": payload["usage"].get("output_tokens", 0),
+                                }
+                            )
+                except Exception:  # noqa: BLE001
+                    pass
+                yield raw
+
+            # After the stream closes, persist the cache row.
+            final_text = "".join(collected_text).strip()
+            if final_text:
+                try:
+                    IssueSummary.objects.update_or_create(
+                        issue_id=issue_id,
+                        defaults={
+                            "workspace_id": workspace_id,
+                            "content_hash": content_hash,
+                            "summary_text": final_text,
+                            "model_used": chosen_model_used[0],
+                            "input_tokens": final_usage_tokens["input_tokens"],
+                            "output_tokens": final_usage_tokens["output_tokens"],
+                        },
+                    )
+                except Exception:  # noqa: BLE001
+                    logger.exception("summarize: failed to persist cache row")
+
+        response = StreamingHttpResponse(
+            sync_iter(), content_type="text/event-stream"
+        )
+        for header, value in sse_response_headers().items():
+            response[header] = value
+        return response
+
+
+def _sse_frame(event: dict) -> str:
+    """SSE frame formatter — duplicated locally so the view doesn't
+    have to import a private helper from ai.streaming."""
+    import json as _json
+
+    return f"data: {_json.dumps(event, ensure_ascii=False)}\n\n"
 
 
 def _coverage_breakdown(workspace_id) -> dict[str, dict[str, int]]:

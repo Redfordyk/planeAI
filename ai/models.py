@@ -401,6 +401,46 @@ class AIProjectSettings(models.Model):
         return f"AISettings({self.project_id}, exclude={self.exclude_from_ai})"
 
 
+class IssueSummary(models.Model):
+    """Cached AI summary of a work item (title + description + comments).
+
+    One row per work item — the row is overwritten when the source
+    content changes. ``content_hash`` is a sha256 of the title +
+    description + every comment in stable order; a cache hit is when
+    the hash on a new request matches the stored hash, in which case
+    we skip the LLM call entirely (TZ 3.2 — P0.3 backlog).
+
+    We store ``workspace_id`` denormalised so cleanup jobs and
+    workspace-scoped queries don't need to traverse Plane's Issue
+    table (CLAUDE.md invariant 6: own data lives in our tables).
+    No FK to ``db.Issue`` either — when an issue is hard-deleted upstream
+    we cleanup via signal in ai/signals.py.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    issue_id = models.UUIDField(unique=True, db_index=True)
+    workspace_id = models.UUIDField(db_index=True)
+    content_hash = models.CharField(max_length=64)
+    summary_text = models.TextField()
+    model_used = models.CharField(max_length=60)
+    # Token counters are informational — biller of record is AIUsageLog.
+    input_tokens = models.IntegerField(default=0)
+    output_tokens = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "ai_issue_summary"
+        verbose_name = "AI issue summary"
+        verbose_name_plural = "AI issue summaries"
+        indexes = [
+            models.Index(fields=["workspace_id", "updated_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"IssueSummary(issue={self.issue_id}, model={self.model_used})"
+
+
 # ---------------------------------------------------------------------------
 # planeAI Multi-Agent Orchestrator (phases 7-12)
 # ---------------------------------------------------------------------------

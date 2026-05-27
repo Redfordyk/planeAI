@@ -38,6 +38,7 @@ from ai.views import (
     IndexStatusView,
     ProjectAISettingsView,
     SearchView,
+    SummarizeIssueView,
     TranscribeView,
 )
 
@@ -60,6 +61,11 @@ urlpatterns = [
         "workspaces/<uuid:workspace_id>/projects/<uuid:project_id>/ai-settings/",
         ProjectAISettingsView.as_view(),
         name="project-ai-settings",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/issues/<uuid:issue_id>/summarize/",
+        SummarizeIssueView.as_view(),
+        name="summarize-issue",
     ),
     # --- Voice + interactive agent (2026-05) ------------------------
     path(
