@@ -34,13 +34,21 @@ export function ProfilePriorityDistribution({ userProfile }: Props) {
             <BarChart
               className="h-[300px] w-full"
               margin={{ top: 20, right: 30, bottom: 5, left: 0 }}
-              data={userProfile.priority_distribution.map((priority) => ({
-                key: priority.priority ?? "None",
-                name: priority.priority
-                  ? t(`issue.priority.${priority.priority.toLowerCase()}`)
-                  : t("common.none"),
-                count: priority.priority_count,
-              }))}
+              data={userProfile.priority_distribution.map((priority) => {
+                const raw = (priority.priority ?? "").toLowerCase();
+                // The API uses "none" as a real bucket name AND can
+                // sometimes omit `priority` entirely. Both should map
+                // to "Нет" / "None", not to a non-existent
+                // `issue.priority.none` key.
+                const name = !raw || raw === "none"
+                  ? t("common.none")
+                  : t(`issue.priority.${raw}`);
+                return {
+                  key: priority.priority ?? "None",
+                  name,
+                  count: priority.priority_count,
+                };
+              })}
               bars={[
                 {
                   key: "count",
