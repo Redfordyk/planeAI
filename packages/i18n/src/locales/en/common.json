@@ -911,6 +911,13 @@
       "converted_to_issue": "to a work item",
       "converted_prefix": "converted"
     },
+    "work_item_actions": {
+      "created": "created the work item.",
+      "created_via": "created the work item via",
+      "deleted": "deleted a work item.",
+      "restored": "restored the work item",
+      "archived": "archived the work item"
+    },
     "label": {
       "added": "added a new label",
       "removed": "removed the label"

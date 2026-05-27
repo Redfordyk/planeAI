@@ -5,6 +5,7 @@
  */
 
 import { observer } from "mobx-react";
+import { useTranslation } from "@plane/i18n";
 import { PriorityPropertyIcon } from "@plane/propel/icons";
 // hooks
 import { useIssueDetail } from "@/hooks/store/use-issue-detail";
@@ -16,6 +17,7 @@ type TIssuePriorityActivity = { activityId: string; showIssue?: boolean; ends: "
 export const IssuePriorityActivity = observer(function IssuePriorityActivity(props: TIssuePriorityActivity) {
   const { activityId, showIssue = true, ends } = props;
   // hooks
+  const { t } = useTranslation();
   const {
     activity: { getActivityById },
   } = useIssueDetail();
@@ -23,6 +25,13 @@ export const IssuePriorityActivity = observer(function IssuePriorityActivity(pro
   const activity = getActivityById(activityId);
 
   if (!activity) return <></>;
+  // Translate the priority value itself (urgent/high/medium/low/none).
+  const rawPriority = (activity.new_value ?? "").toLowerCase();
+  const translatedPriority = rawPriority
+    ? rawPriority === "none"
+      ? t("activity_feed.priority.none")
+      : t(`issue.priority.${rawPriority}`)
+    : activity.new_value;
   return (
     <IssueActivityBlockComponent
       icon={<PriorityPropertyIcon className="h-3.5 w-3.5 text-secondary" aria-hidden="true" />}
@@ -30,8 +39,9 @@ export const IssuePriorityActivity = observer(function IssuePriorityActivity(pro
       ends={ends}
     >
       <>
-        set the priority to <span className="font-medium text-primary">{activity.new_value}</span>
-        {showIssue ? ` for ` : ``}
+        {t("activity_feed.priority.set_to")}{" "}
+        <span className="font-medium text-primary">{translatedPriority}</span>
+        {showIssue ? ` ${t("activity_feed.preposition.for")} ` : ``}
         {showIssue && <IssueLink activityId={activityId} />}.
       </>
     </IssueActivityBlockComponent>
