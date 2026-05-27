@@ -1002,6 +1002,36 @@
       "of": "у"
     }
   },
+  "rich_filters": {
+    "all_filters_applied": "Все фильтры применены",
+    "clear_all": "Очистить все",
+    "save_view": "Сохранить представление",
+    "update_view": "Обновить представление",
+    "confirming": "Подтверждаем…",
+    "labels": {
+      "state": "Статус",
+      "state_group": "Группа статусов",
+      "assignees": "Назначенные",
+      "mentions": "Упоминания",
+      "created_by": "Создатель",
+      "subscriber": "Подписчик",
+      "label": "Метка",
+      "cycle": "Цикл",
+      "module": "Модуль",
+      "priority": "Приоритет",
+      "projects": "Проекты",
+      "start_date": "Дата начала",
+      "target_date": "Целевая дата",
+      "created_at": "Создано",
+      "updated_at": "Обновлено"
+    },
+    "toast": {
+      "config_error": {
+        "title": "Ошибка конфигурации фильтра",
+        "message": "Этот фильтр настроен некорректно и не может быть применён"
+      }
+    }
+  },
   "state_defaults": {
     "Backlog": "Бэклог",
     "Todo": "Сделать",

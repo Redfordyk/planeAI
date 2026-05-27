@@ -29,7 +29,7 @@ export const getAssigneeFilterConfig =
   (params: TCreateAssigneeFilterParams) =>
     createFilterConfig<P>({
       id: key,
-      label: "Assignees",
+      label: "rich_filters.labels.assignees",
       ...params,
       icon: params.filterIcon,
       supportedOperatorConfigsMap: new Map([
@@ -57,7 +57,7 @@ export const getMentionFilterConfig =
   (params: TCreateMentionFilterParams) =>
     createFilterConfig<P>({
       id: key,
-      label: "Mentions",
+      label: "rich_filters.labels.mentions",
       ...params,
       icon: params.filterIcon,
       supportedOperatorConfigsMap: new Map([
@@ -85,7 +85,7 @@ export const getCreatedByFilterConfig =
   (params: TCreateCreatedByFilterParams) =>
     createFilterConfig<P>({
       id: key,
-      label: "Created by",
+      label: "rich_filters.labels.created_by",
       ...params,
       icon: params.filterIcon,
       supportedOperatorConfigsMap: new Map([
@@ -113,7 +113,7 @@ export const getSubscriberFilterConfig =
   (params: TCreateSubscriberFilterParams) =>
     createFilterConfig<P>({
       id: key,
-      label: "Subscriber",
+      label: "rich_filters.labels.subscriber",
       ...params,
       icon: params.filterIcon,
       supportedOperatorConfigsMap: new Map([

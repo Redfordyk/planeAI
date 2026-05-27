@@ -72,6 +72,8 @@ interface CustomSearchSelectProps {
   onChange: any;
   onClose?: () => void;
   noResultsMessage?: string;
+  /** Placeholder for the search input. Defaults to "Search". */
+  searchPlaceholder?: string;
   options?: ICustomSearchSelectOption[];
 }
 

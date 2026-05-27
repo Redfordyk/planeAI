@@ -1002,6 +1002,36 @@
       "of": "of"
     }
   },
+  "rich_filters": {
+    "all_filters_applied": "All filters applied",
+    "clear_all": "Clear all",
+    "save_view": "Save view",
+    "update_view": "Update view",
+    "confirming": "Confirming",
+    "labels": {
+      "state": "State",
+      "state_group": "State Group",
+      "assignees": "Assignees",
+      "mentions": "Mentions",
+      "created_by": "Created by",
+      "subscriber": "Subscriber",
+      "label": "Label",
+      "cycle": "Cycle",
+      "module": "Module",
+      "priority": "Priority",
+      "projects": "Projects",
+      "start_date": "Start date",
+      "target_date": "Target date",
+      "created_at": "Created at",
+      "updated_at": "Updated at"
+    },
+    "toast": {
+      "config_error": {
+        "title": "Filter configuration error",
+        "message": "This filter is not properly configured and cannot be applied"
+      }
+    }
+  },
   "state_defaults": {
     "Backlog": "Backlog",
     "Todo": "Todo",

@@ -7,6 +7,7 @@
 import React from "react";
 import { observer } from "mobx-react";
 // plane imports
+import { useTranslation } from "@plane/i18n";
 import type { IFilterInstance } from "@plane/shared-state";
 import type {
   SingleOrArray,
@@ -38,8 +39,12 @@ export const FilterItem = observer(function FilterItem<P extends TFilterProperty
   props: IFilterItemProps<P, E>
 ) {
   const { condition, filter, isDisabled = false, showTransition = true } = props;
+  const { t } = useTranslation();
   // derived values
   const filterConfig = condition?.property ? filter.configManager.getConfigByProperty(condition.property) : undefined;
+  const translatedLabel = filterConfig?.label?.startsWith("rich_filters.")
+    ? t(filterConfig.label)
+    : filterConfig?.label;
   const operatorOptions = filterConfig
     ?.getAllDisplayOperatorOptionsByValue(condition.value as TFilterValue)
     .map((option) => ({
@@ -91,7 +96,7 @@ export const FilterItem = observer(function FilterItem<P extends TFilterProperty
         filter={filter}
         icon={filterConfig.icon}
         isDisabled={isDisabled}
-        label={filterConfig.label}
+        label={translatedLabel ?? filterConfig.label}
         tooltipContent={filterConfig.tooltipContent}
       />
 
