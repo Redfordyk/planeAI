@@ -994,6 +994,24 @@
       "of": "of"
     }
   },
+  "publish_modal": {
+    "unpublish": "Unpublish",
+    "unpublishing": "Unpublishing",
+    "publishing": "Publishing",
+    "update_settings": "Update settings",
+    "updating": "Updating",
+    "live_on_web": "This project is now live on web",
+    "allow_comments": "Allow comments",
+    "allow_reactions": "Allow reactions",
+    "allow_voting": "Allow voting",
+    "anyone_with_link": "Anyone with the link can access",
+    "toast": {
+      "settings_updated": "Publish settings updated successfully!",
+      "unpublish_failed": "Something went wrong while unpublishing the project.",
+      "link_copied": "Published page link copied successfully.",
+      "select_layout": "Please select at least one view layout to publish the project."
+    }
+  },
   "summarize": {
     "button_tooltip": "Summarize this work item",
     "modal_title": "Work item summary",
