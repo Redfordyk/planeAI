@@ -213,17 +213,28 @@ const getStateColumns = ({ projectId }: TGetColumns): IGroupByColumn[] | undefin
   const { getProjectStates, projectStates } = store.state;
   const _states = projectId ? getProjectStates(projectId) : projectStates;
   if (!_states) return;
+  const t = i18nInstance.t.bind(i18nInstance) as (k: string) => string;
   // map project states to group by columns
-  return _states.map((state) => ({
-    id: state.id,
-    name: state.name,
-    icon: (
-      <div className="size-4 rounded-full">
-        <StateGroupIcon stateGroup={state.group} color={state.color} size={EIconSize.LG} percentage={state.order} />
-      </div>
-    ),
-    payload: { state_id: state.id },
-  }));
+  return _states.map((state) => {
+    // Translate the seeded default English names (Backlog/Todo/In
+    // Progress/Done/Cancelled/Triage) via common.state_defaults.*; a
+    // user-renamed state keeps its raw name. Lookup inlined here so
+    // we don't pull in @/lib/state-name (non-React context).
+    const defaultNames = ["Backlog", "Todo", "In Progress", "Done", "Cancelled", "Triage"];
+    const displayName = state.name && defaultNames.includes(state.name)
+      ? t(`state_defaults.${state.name}`)
+      : state.name;
+    return {
+      id: state.id,
+      name: displayName,
+      icon: (
+        <div className="size-4 rounded-full">
+          <StateGroupIcon stateGroup={state.group} color={state.color} size={EIconSize.LG} percentage={state.order} />
+        </div>
+      ),
+      payload: { state_id: state.id },
+    };
+  });
 };
 
 const getStateGroupColumns = (): IGroupByColumn[] => {

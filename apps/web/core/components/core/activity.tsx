@@ -24,6 +24,7 @@ import {
   UsersIcon,
 } from "lucide-react";
 import { useTranslation } from "@plane/i18n";
+import { translateStateName } from "@/lib/state-name";
 import {
   BlockedIcon,
   BlockerIcon,
@@ -669,7 +670,7 @@ const activityDetails: {
     message: (activity, showIssue, _ws, t) => (
       <>
         {t("activity_feed.state.set_to")}{" "}
-        <span className="font-medium break-all text-primary">{activity.new_value}</span>
+        <span className="font-medium break-all text-primary">{translateStateName(activity.new_value, t)}</span>
         {showIssue && (
           <>
             {" "}

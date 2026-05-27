@@ -9,6 +9,8 @@ import { observer } from "mobx-react";
 import { useTranslation } from "@plane/i18n";
 import { StatePropertyIcon } from "@plane/propel/icons";
 import { useIssueDetail } from "@/hooks/store/use-issue-detail";
+// helpers
+import { translateStateName } from "@/lib/state-name";
 // components
 import { IssueActivityBlockComponent, IssueLink } from "./";
 // icons
@@ -34,7 +36,7 @@ export const IssueStateActivity = observer(function IssueStateActivity(props: TI
     >
       <>
         {t("activity_feed.state.set_to")}{" "}
-        <span className="font-medium text-primary">{activity.new_value}</span>
+        <span className="font-medium text-primary">{translateStateName(activity.new_value, t)}</span>
         {showIssue ? ` ${t("activity_feed.preposition.for")} ` : ``}
         {showIssue && <IssueLink activityId={activityId} />}.
       </>

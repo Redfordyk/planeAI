@@ -996,6 +996,14 @@
       "of": "of"
     }
   },
+  "state_defaults": {
+    "Backlog": "Backlog",
+    "Todo": "Todo",
+    "In Progress": "In Progress",
+    "Done": "Done",
+    "Cancelled": "Cancelled",
+    "Triage": "Triage"
+  },
   "publish_modal": {
     "unpublish": "Unpublish",
     "unpublishing": "Unpublishing",

@@ -996,6 +996,14 @@
       "of": "у"
     }
   },
+  "state_defaults": {
+    "Backlog": "Бэклог",
+    "Todo": "Сделать",
+    "In Progress": "В работе",
+    "Done": "Готово",
+    "Cancelled": "Отменено",
+    "Triage": "Триаж"
+  },
   "publish_modal": {
     "unpublish": "Снять с публикации",
     "unpublishing": "Снимаем…",
