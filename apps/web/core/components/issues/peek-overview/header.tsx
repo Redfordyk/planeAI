@@ -4,10 +4,10 @@
  * See the LICENSE file for details.
  */
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { observer } from "mobx-react";
 import Link from "next/link";
-import { MoveDiagonal, MoveRight } from "lucide-react";
+import { MoveDiagonal, MoveRight, Sparkles } from "lucide-react";
 // plane imports
 import { useTranslation } from "@plane/i18n";
 import { CenterPanelIcon, CopyLinkIcon, FullScreenPanelIcon, SidePanelIcon } from "@plane/propel/icons";
@@ -17,11 +17,14 @@ import type { TNameDescriptionLoader } from "@plane/types";
 import { EIssuesStoreType } from "@plane/types";
 import { CustomSelect } from "@plane/ui";
 import { copyUrlToClipboard, generateWorkItemLink } from "@plane/utils";
+// components
+import { SummarizeModal } from "@/components/ai/summarize/summarize-modal";
 // hooks
 import { useIssueDetail } from "@/hooks/store/use-issue-detail";
 import { useIssues } from "@/hooks/store/use-issues";
 import { useProject } from "@/hooks/store/use-project";
 import { useUser } from "@/hooks/store/user";
+import { useWorkspace } from "@/hooks/store/use-workspace";
 import { usePlatformOS } from "@/hooks/use-platform-os";
 // local imports
 import { IssueSubscription } from "../issue-detail/subscription";
@@ -88,6 +91,9 @@ export const IssuePeekOverviewHeader = observer(function IssuePeekOverviewHeader
   // ref
   const parentRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
+  // summarize modal
+  const [isSummarizeOpen, setIsSummarizeOpen] = useState(false);
+  const { currentWorkspace } = useWorkspace();
   // store hooks
   const { data: currentUser } = useUser();
   const {
@@ -205,6 +211,15 @@ export const IssuePeekOverviewHeader = observer(function IssuePeekOverviewHeader
           {currentUser && !isArchived && (
             <IssueSubscription workspaceSlug={workspaceSlug} projectId={projectId} issueId={issueId} />
           )}
+          <Tooltip tooltipContent={t("summarize.button_tooltip")} isMobile={isMobile}>
+            <IconButton
+              variant="secondary"
+              size="lg"
+              onClick={() => setIsSummarizeOpen(true)}
+              icon={(props) => <Sparkles {...props} />}
+              disabled={isArchived}
+            />
+          </Tooltip>
           <Tooltip tooltipContent={t("common.actions.copy_link")} isMobile={isMobile}>
             <IconButton variant="secondary" size="lg" onClick={handleCopyText} icon={CopyLinkIcon} />
           </Tooltip>
@@ -225,6 +240,12 @@ export const IssuePeekOverviewHeader = observer(function IssuePeekOverviewHeader
           )}
         </div>
       </div>
+      <SummarizeModal
+        isOpen={isSummarizeOpen}
+        onClose={() => setIsSummarizeOpen(false)}
+        workspaceId={currentWorkspace?.id}
+        issueId={issueId}
+      />
     </div>
   );
 });
