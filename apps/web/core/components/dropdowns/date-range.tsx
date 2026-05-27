@@ -18,7 +18,7 @@ import type { DateRange, Matcher } from "@plane/propel/calendar";
 import { Calendar } from "@plane/propel/calendar";
 import { CloseIcon, DueDatePropertyIcon } from "@plane/propel/icons";
 import { ComboDropDown } from "@plane/ui";
-import { cn, renderFormattedDate } from "@plane/utils";
+import { cn, getCurrentDateFnsLocale, renderFormattedDate } from "@plane/utils";
 // helpers
 // hooks
 import { useUserProfile } from "@/hooks/store/user";
@@ -280,6 +280,7 @@ export const DateRangeDropdown = observer(function DateRangeDropdown(props: Prop
           showOutsideDays
           fixedWeeks
           weekStartsOn={startOfWeek}
+          locale={getCurrentDateFnsLocale()}
           initialFocus
         />
       </div>

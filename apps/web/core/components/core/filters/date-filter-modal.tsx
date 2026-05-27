@@ -9,7 +9,7 @@ import { Button } from "@plane/propel/button";
 import { Calendar } from "@plane/propel/calendar";
 import { CloseIcon } from "@plane/propel/icons";
 import { EModalPosition, EModalWidth, ModalCore } from "@plane/ui";
-import { renderFormattedPayloadDate, renderFormattedDate, getDate } from "@plane/utils";
+import { getCurrentDateFnsLocale, renderFormattedPayloadDate, renderFormattedDate, getDate } from "@plane/utils";
 import { DateFilterSelect } from "./date-filter-select";
 type Props = {
   title: string;
@@ -82,6 +82,7 @@ export function DateFilterModal({ title, handleClose, isOpen, onSelect }: Props)
                   }}
                   mode="single"
                   disabled={date2Value ? [{ after: date2Value }] : undefined}
+                  locale={getCurrentDateFnsLocale()}
                 />
               );
             }}
@@ -105,6 +106,7 @@ export function DateFilterModal({ title, handleClose, isOpen, onSelect }: Props)
                     }}
                     mode="single"
                     disabled={date1Value ? [{ before: date1Value }] : undefined}
+                    locale={getCurrentDateFnsLocale()}
                   />
                 );
               }}

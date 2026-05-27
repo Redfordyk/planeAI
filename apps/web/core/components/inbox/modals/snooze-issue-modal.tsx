@@ -10,6 +10,7 @@ import { useTranslation } from "@plane/i18n";
 import { Button } from "@plane/propel/button";
 import { Calendar } from "@plane/propel/calendar";
 import { EModalPosition, EModalWidth, ModalCore } from "@plane/ui";
+import { getCurrentDateFnsLocale } from "@plane/utils";
 
 export type InboxIssueSnoozeModalProps = {
   isOpen: boolean;
@@ -49,6 +50,7 @@ export function InboxIssueSnoozeModal(props: InboxIssueSnoozeModalProps) {
               before: new Date(),
             },
           ]}
+          locale={getCurrentDateFnsLocale()}
         />
         <Button
           variant="primary"

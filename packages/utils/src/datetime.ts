@@ -61,7 +61,7 @@ const DATE_FNS_LOCALES: Record<string, Locale> = {
 // i18n-runtime dependency. Mirrors LANGUAGE_STORAGE_KEY.
 const LANGUAGE_STORAGE_KEY = "userLanguage";
 
-function getCurrentDateFnsLocale(): Locale {
+export function getCurrentDateFnsLocale(): Locale {
   if (typeof window === "undefined") return enUS; // SSR
   try {
     const lang = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);

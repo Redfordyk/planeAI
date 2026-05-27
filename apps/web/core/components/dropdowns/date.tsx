@@ -15,7 +15,7 @@ import type { Matcher } from "@plane/propel/calendar";
 import { Calendar } from "@plane/propel/calendar";
 import { CloseIcon } from "@plane/propel/icons";
 import { ComboDropDown } from "@plane/ui";
-import { cn, renderFormattedDate, getDate } from "@plane/utils";
+import { cn, getCurrentDateFnsLocale, renderFormattedDate, getDate } from "@plane/utils";
 // helpers
 // hooks
 import { useUserProfile } from "@/hooks/store/user";
@@ -205,6 +205,7 @@ export const DateDropdown = observer(function DateDropdown(props: Props) {
                 mode="single"
                 fixedWeeks
                 weekStartsOn={startOfWeek}
+                locale={getCurrentDateFnsLocale()}
               />
             </div>
           </Combobox.Options>,
