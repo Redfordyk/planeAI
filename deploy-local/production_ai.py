@@ -44,6 +44,10 @@ AUTH_PASSWORD_VALIDATORS = []
 # publishing disabled there.
 ANGELA = {
     "WORKDIR": os.environ.get("ANGELA_WORKDIR", "/tmp/angela"),
+    # Static artifact hosting — successful runs publish their built checkout
+    # here, served at ARTIFACTS_URL_BASE so the user gets a real link.
+    "ARTIFACTS_DIR": os.environ.get("ANGELA_ARTIFACTS_DIR", "/srv/angela-artifacts"),
+    "ARTIFACTS_URL_BASE": os.environ.get("ANGELA_ARTIFACTS_URL_BASE", ""),
     "DEFAULT_TARGET": os.environ.get("ANGELA_DEFAULT_TARGET", "demo"),
     "MAX_FIX_ITERATIONS": int(os.environ.get("ANGELA_MAX_FIX_ITERATIONS", "3")),
     "CMD_TIMEOUT": int(os.environ.get("ANGELA_CMD_TIMEOUT", "600")),

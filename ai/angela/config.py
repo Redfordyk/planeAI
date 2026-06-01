@@ -69,6 +69,12 @@ class TargetConfig:
 
 _DEFAULTS: dict[str, Any] = {
     "WORKDIR": os.path.join(os.environ.get("ANGELA_WORKDIR", "") or "/tmp/angela"),
+    # Where successful runs publish their built artifact (a shared volume
+    # also mounted into the static-hosting nginx) + the public URL base
+    # that serves it. When URL base is set, every successful deploy yields
+    # a real clickable link instead of a dry-run no-op.
+    "ARTIFACTS_DIR": os.environ.get("ANGELA_ARTIFACTS_DIR", "") or "/srv/angela-artifacts",
+    "ARTIFACTS_URL_BASE": os.environ.get("ANGELA_ARTIFACTS_URL_BASE", ""),
     "DEFAULT_TARGET": "demo",
     "TARGETS": {
         # Ships pointing at the autodoc demo repo so a fresh install has
@@ -119,6 +125,20 @@ def workdir() -> Path:
     p = Path(_raw()["WORKDIR"]).resolve()
     p.mkdir(parents=True, exist_ok=True)
     return p
+
+
+def artifacts_dir() -> Path:
+    """Filesystem dir where successful runs publish their artifact.
+    Created lazily; world-writable expectations are handled at deploy."""
+    p = Path(_raw().get("ARTIFACTS_DIR", "/srv/angela-artifacts")).resolve()
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def artifacts_url_base() -> str:
+    """Public URL base that serves ``artifacts_dir`` (no trailing slash).
+    Empty string disables artifact hosting (deploy falls back to dry-run)."""
+    return str(_raw().get("ARTIFACTS_URL_BASE", "")).rstrip("/")
 
 
 def max_fix_iterations() -> int:

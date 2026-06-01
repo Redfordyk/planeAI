@@ -23,15 +23,58 @@ manual buttons call :func:`deploy_prod` directly via the API.
 from __future__ import annotations
 
 import logging
+import shutil
 from dataclasses import dataclass
+from pathlib import Path
 
 from ai.models import AngelaRun, AngelaStep
 
 from .base import log_step, set_status
+from .config import artifacts_dir, artifacts_url_base
 from .sandbox import Sandbox
 
 
 logger = logging.getLogger("plane.ai.angela.deployer")
+
+# Files we never copy into the published artifact.
+_ARTIFACT_IGNORE = shutil.ignore_patterns(
+    ".git", "__pycache__", "*.pyc", ".venv", "venv", "node_modules", ".pytest_cache"
+)
+
+
+def _find_entry_index(dest: Path) -> str:
+    """Return the relative path of the best index.html to link to.
+
+    Preference: an index.html at the artifact root, else the shallowest
+    index.html anywhere (its containing dir), else "" (autoindex root)."""
+    if (dest / "index.html").is_file():
+        return ""
+    candidates = sorted(
+        (p for p in dest.rglob("index.html") if p.is_file()),
+        key=lambda p: len(p.relative_to(dest).parts),
+    )
+    if candidates:
+        rel_dir = candidates[0].parent.relative_to(dest).as_posix()
+        return (rel_dir + "/") if rel_dir != "." else ""
+    return ""
+
+
+def _publish_artifact(sandbox: Sandbox, run_id) -> str:
+    """Copy the sandbox checkout into the served artifacts dir and return
+    a public URL. Raises if hosting is not configured (no URL base)."""
+    url_base = artifacts_url_base()
+    if not url_base:
+        raise RuntimeError("artifact hosting not configured (ANGELA_ARTIFACTS_URL_BASE empty)")
+    dest = artifacts_dir() / str(run_id)
+    if dest.exists():
+        shutil.rmtree(dest, ignore_errors=True)
+    shutil.copytree(sandbox.root, dest, ignore=_ARTIFACT_IGNORE)
+    entry = _find_entry_index(dest)
+    return f"{url_base}/{run_id}/{entry}"
+
+
+def _artifact_dest(run_id) -> Path:
+    return artifacts_dir() / str(run_id)
 
 
 @dataclass
@@ -42,35 +85,64 @@ class DeployOutcome:
     detail: str
 
 
-def _do_deploy(sandbox: Sandbox, *, env: str) -> DeployOutcome:
-    """Run the configured deploy command for ``env`` ('staging'|'prod')."""
+def _do_deploy(sandbox: Sandbox, *, env: str, run_id) -> DeployOutcome:
+    """Deploy for ``env`` ('staging'|'prod').
+
+    Two paths:
+      - A custom ``*_deploy_cmd`` is configured → run it inside the
+        checkout, with ANGELA_RUN_ID / ANGELA_ENV / ANGELA_ARTIFACT_DIR /
+        ANGELA_PUBLIC_URL exported so the script can place files and we can
+        report a link.
+      - No command → publish the built checkout to the static artifact host
+        so the run still produces a REAL, clickable URL (not a dry-run).
+    """
     target = sandbox.target
     if env == "prod":
-        cmd, url = target.prod_deploy_cmd, target.prod_url
+        cmd, configured_url = target.prod_deploy_cmd, target.prod_url
     else:
-        cmd, url = target.staging_deploy_cmd, target.staging_url
+        cmd, configured_url = target.staging_deploy_cmd, target.staging_url
 
-    if not cmd:
-        # No command configured → treat as a dry-run "deployment" so the
-        # demo flow completes end-to-end without real infra.
-        return DeployOutcome(
-            ok=True, target_env=env, url=url,
-            detail=f"(dry-run) no {env}_deploy_cmd configured; artifact ready at branch.",
-        )
-    res = sandbox.run_shell(cmd)
+    if cmd:
+        extra = {
+            "ANGELA_RUN_ID": str(run_id),
+            "ANGELA_ENV": env,
+            "ANGELA_ARTIFACT_DIR": str(_artifact_dest(run_id)),
+            "ANGELA_PUBLIC_URL": (artifacts_url_base() + f"/{run_id}/") if artifacts_url_base() else "",
+        }
+        res = sandbox.run_shell(cmd, extra_env=extra)
+        url = (configured_url or extra["ANGELA_PUBLIC_URL"]) if res.ok else ""
+        return DeployOutcome(ok=res.ok, target_env=env, url=url, detail=res.tail(2000))
+
+    # No custom command → static-host the artifact for a working link.
+    if artifacts_url_base():
+        try:
+            url = _publish_artifact(sandbox, run_id)
+            return DeployOutcome(
+                ok=True, target_env=env, url=url,
+                detail=f"Published static artifact → {url}",
+            )
+        except Exception as exc:  # noqa: BLE001
+            return DeployOutcome(
+                ok=False, target_env=env, url="",
+                detail=f"artifact publish failed: {exc}",
+            )
+
+    # Hosting not configured anywhere → last-resort dry run.
     return DeployOutcome(
-        ok=res.ok, target_env=env, url=url if res.ok else "", detail=res.tail(2000)
+        ok=True, target_env=env, url=configured_url,
+        detail=f"(dry-run) no {env}_deploy_cmd and no artifact host configured.",
     )
 
 
 def deploy_staging(run: AngelaRun, sandbox: Sandbox) -> DeployOutcome:
     log_step(run, phase=AngelaStep.PHASE_DEPLOY, status=AngelaStep.STATUS_STARTED,
              title="deploy → staging")
-    out = _do_deploy(sandbox, env="staging")
+    out = _do_deploy(sandbox, env="staging", run_id=run.id)
     log_step(
         run, phase=AngelaStep.PHASE_DEPLOY,
         status=AngelaStep.STATUS_OK if out.ok else AngelaStep.STATUS_FAILED,
-        title=f"staging {'ok' if out.ok else 'failed'}", detail=out.detail,
+        title=f"staging {'ok' if out.ok else 'failed'}" + (f" — {out.url}" if out.url else ""),
+        detail=out.detail,
     )
     return out
 
@@ -78,11 +150,12 @@ def deploy_staging(run: AngelaRun, sandbox: Sandbox) -> DeployOutcome:
 def deploy_prod(run: AngelaRun, sandbox: Sandbox) -> DeployOutcome:
     log_step(run, phase=AngelaStep.PHASE_DEPLOY, status=AngelaStep.STATUS_STARTED,
              title="deploy → prod (sandbox)")
-    out = _do_deploy(sandbox, env="prod")
+    out = _do_deploy(sandbox, env="prod", run_id=run.id)
     log_step(
         run, phase=AngelaStep.PHASE_DEPLOY,
         status=AngelaStep.STATUS_OK if out.ok else AngelaStep.STATUS_FAILED,
-        title=f"prod {'ok' if out.ok else 'failed'}", detail=out.detail,
+        title=f"prod {'ok' if out.ok else 'failed'}" + (f" — {out.url}" if out.url else ""),
+        detail=out.detail,
     )
     return out
 

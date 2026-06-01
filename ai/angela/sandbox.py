@@ -163,11 +163,16 @@ class Sandbox:
 
     # --- arbitrary commands (test / install / deploy) ---------------
 
-    def run_shell(self, command: str) -> CmdResult:
-        """Run a shell command inside the checkout (test/install/deploy)."""
+    def run_shell(self, command: str, *, extra_env: dict[str, str] | None = None) -> CmdResult:
+        """Run a shell command inside the checkout (test/install/deploy).
+
+        ``extra_env`` is merged on top of the de-contaminated sandbox env —
+        used by the deployer to expose ANGELA_RUN_ID / ANGELA_PUBLIC_URL /
+        ANGELA_ARTIFACT_DIR to custom deploy scripts.
+        """
         if not command.strip():
             return CmdResult(command, 0, "", "")
-        return self._run_raw(["/bin/sh", "-c", command], cwd=str(self.root))
+        return self._run_raw(["/bin/sh", "-c", command], cwd=str(self.root), extra_env=extra_env)
 
     # --- internals --------------------------------------------------
 
@@ -177,7 +182,12 @@ class Sandbox:
             logger.warning("git %s failed: %s", " ".join(args), res.tail(500))
         return res
 
-    def _run_raw(self, argv: list[str], *, cwd: str) -> CmdResult:
+    def _run_raw(
+        self, argv: list[str], *, cwd: str, extra_env: dict[str, str] | None = None
+    ) -> CmdResult:
+        env = _sandbox_env()
+        if extra_env:
+            env.update({k: str(v) for k, v in extra_env.items()})
         try:
             proc = subprocess.run(
                 argv,
@@ -185,7 +195,7 @@ class Sandbox:
                 capture_output=True,
                 text=True,
                 timeout=cmd_timeout(),
-                env=_sandbox_env(),
+                env=env,
             )
             return CmdResult(
                 cmd=" ".join(argv),
