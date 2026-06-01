@@ -1075,6 +1075,7 @@
     "task_label": "Task for Angela",
     "task_placeholder": "Describe what Angela should build. She writes the code, reviews it, tests it, then deploys it to the sandbox.",
     "target_label": "Sandbox repo",
+    "deploy_mode_label": "Deploy mode",
     "runs_title": "Runs",
     "refresh": "Refresh",
     "no_runs": "No runs yet.",
