@@ -95,6 +95,9 @@ export const coreRoutes: RouteConfigEntry[] = [
           ),
         ]),
 
+        // Angela — autonomous coding agent (sandbox)
+        route(":workspaceSlug/angela", "./(all)/[workspaceSlug]/(projects)/angela/page.tsx"),
+
         // Profile
         layout("./(all)/[workspaceSlug]/(projects)/profile/[userId]/layout.tsx", [
           route(":workspaceSlug/profile/:userId", "./(all)/[workspaceSlug]/(projects)/profile/[userId]/page.tsx"),
