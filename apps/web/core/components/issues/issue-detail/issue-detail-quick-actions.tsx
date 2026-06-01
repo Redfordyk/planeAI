@@ -6,7 +6,7 @@
 
 import { useRef, useState } from "react";
 import { observer } from "mobx-react";
-import { Sparkles } from "lucide-react";
+import { Bot, Sparkles } from "lucide-react";
 // plane imports
 import { useTranslation } from "@plane/i18n";
 import { CopyLinkIcon } from "@plane/propel/icons";
@@ -18,6 +18,7 @@ import { generateWorkItemLink, copyTextToClipboard } from "@plane/utils";
 // components
 import { SummarizeModal } from "@/components/ai/summarize/summarize-modal";
 // hooks
+import { useAngela } from "@/hooks/ai/use-angela";
 import { useIssueDetail } from "@/hooks/store/use-issue-detail";
 import { useIssues } from "@/hooks/store/use-issues";
 import { useProject } from "@/hooks/store/use-project";
@@ -43,7 +44,9 @@ export const IssueDetailQuickActions = observer(function IssueDetailQuickActions
   const parentRef = useRef<HTMLDivElement>(null);
   // summarize modal
   const [isSummarizeOpen, setIsSummarizeOpen] = useState(false);
+  const [isAngelaBusy, setIsAngelaBusy] = useState(false);
   const { currentWorkspace } = useWorkspace();
+  const angela = useAngela(currentWorkspace?.id);
 
   // router
   const router = useAppRouter();
@@ -127,6 +130,33 @@ export const IssueDetailQuickActions = observer(function IssueDetailQuickActions
     }
   };
 
+  const handleRunAngela = async () => {
+    if (!currentWorkspace?.id || isAngelaBusy) return;
+    setIsAngelaBusy(true);
+    try {
+      await angela.startRun({
+        prompt: (issue?.name ?? "").trim() || "task",
+        issueId,
+        projectId,
+        deployMode: "staging_gate",
+      });
+      setToast({
+        type: TOAST_TYPE.SUCCESS,
+        title: t("angela.started.title"),
+        message: t("angela.started.message"),
+      });
+      router.push(`/${workspaceSlug}/angela/`);
+    } catch (error) {
+      setToast({
+        type: TOAST_TYPE.ERROR,
+        title: t("toast.error"),
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setIsAngelaBusy(false);
+    }
+  };
+
   const handleRestore = async () => {
     if (!workspaceSlug || !projectId || !issueId) return;
     try {
@@ -161,6 +191,15 @@ export const IssueDetailQuickActions = observer(function IssueDetailQuickActions
                 onClick={() => setIsSummarizeOpen(true)}
                 icon={(props) => <Sparkles {...props} />}
                 disabled={!!issue?.archived_at}
+              />
+            </Tooltip>
+            <Tooltip tooltipContent={t("angela.run_on_issue_tooltip")} isMobile={isMobile}>
+              <IconButton
+                variant="secondary"
+                size="lg"
+                onClick={handleRunAngela}
+                icon={(props) => <Bot {...props} />}
+                disabled={!!issue?.archived_at || isAngelaBusy}
               />
             </Tooltip>
             <Tooltip tooltipContent={t("common.actions.copy_link")} isMobile={isMobile}>

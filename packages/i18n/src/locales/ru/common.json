@@ -1068,5 +1068,35 @@
     "model_label": "Модель",
     "copy": "Копировать",
     "regenerate": "Перегенерировать"
+  },
+  "angela": {
+    "title": "Angela",
+    "sandbox_badge": "песочница",
+    "task_label": "Задача для Angela",
+    "task_placeholder": "Опишите, что должна сделать Angela. Она сама пишет код, проверяет его, тестирует и деплоит в песочницу.",
+    "target_label": "Репозиторий-песочница",
+    "runs_title": "Запуски",
+    "refresh": "Обновить",
+    "no_runs": "Запусков пока нет.",
+    "select_run": "Выберите запуск, чтобы увидеть живую ленту.",
+    "no_steps": "Шагов пока нет.",
+    "iterations": "Итераций",
+    "generate_docs": "Сгенерировать документацию → Вики",
+    "run_on_issue_tooltip": "Запустить Angela по этой задаче",
+    "error_prompt_required": "Сначала опишите задачу.",
+    "mode_staging_gate_title": "Авто → staging, аппрув на прод",
+    "mode_staging_gate_sub": "Angela сама катит на staging; деплой в прод подтверждает человек.",
+    "mode_autonomous_title": "Полностью автономно → прод",
+    "mode_autonomous_sub": "Код, ревью, тесты и деплой в (песочный) прод без участия человека.",
+    "mode_manual_title": "Только пайплайн, деплой вручную",
+    "mode_manual_sub": "Angela готовит зелёный артефакт; деплой запускаете вы кнопкой.",
+    "approve_prod": "Подтвердить деплой в прод",
+    "deploy_now": "Деплоить сейчас",
+    "open_deploy": "Открыть деплой",
+    "open_wiki": "Открыть страницу вики",
+    "started": {
+      "title": "Angela запущена",
+      "message": "Angela работает над задачей. Открываем её консоль…"
+    }
   }
 }

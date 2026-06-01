@@ -1068,5 +1068,35 @@
     "model_label": "Model",
     "copy": "Copy",
     "regenerate": "Regenerate"
+  },
+  "angela": {
+    "title": "Angela",
+    "sandbox_badge": "sandbox",
+    "task_label": "Task for Angela",
+    "task_placeholder": "Describe what Angela should build. She writes the code, reviews it, tests it, then deploys it to the sandbox.",
+    "target_label": "Sandbox repo",
+    "runs_title": "Runs",
+    "refresh": "Refresh",
+    "no_runs": "No runs yet.",
+    "select_run": "Select a run to see the live feed.",
+    "no_steps": "No steps yet.",
+    "iterations": "Iterations",
+    "generate_docs": "Generate docs → Wiki",
+    "run_on_issue_tooltip": "Run Angela on this work item",
+    "error_prompt_required": "Describe the task first.",
+    "mode_staging_gate_title": "Auto → staging, approve for prod",
+    "mode_staging_gate_sub": "Angela ships to staging on her own; a human approves the prod deploy.",
+    "mode_autonomous_title": "Fully autonomous → prod",
+    "mode_autonomous_sub": "Code, review, test and deploy to (sandbox) prod with no human in the loop.",
+    "mode_manual_title": "Pipeline only, deploy by hand",
+    "mode_manual_sub": "Angela prepares a green artifact; you press Deploy when ready.",
+    "approve_prod": "Approve prod deploy",
+    "deploy_now": "Deploy now",
+    "open_deploy": "Open deployment",
+    "open_wiki": "Open wiki page",
+    "started": {
+      "title": "Angela started",
+      "message": "Angela is working on this item. Opening her console…"
+    }
   }
 }

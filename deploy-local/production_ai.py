@@ -34,3 +34,40 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 # remaining strength check (zxcvbn score >= 3) lives inside Plane's
 # auth adapter; we neutralise it in ai-runtime/permissive_password.py.
 AUTH_PASSWORD_VALIDATORS = []
+
+# --- Angela: autonomous coding agent (sandbox) -----------------------
+# All values are env-driven so the same image works across dev/staging.
+# Angela only ever touches an allow-listed sandbox repo (never the
+# user's prod, never this codebase). The MediaWiki target is expected
+# to run LOCALLY on a developer PC, not on the server — leave
+# ANGELA_WIKI_PASSWORD empty in server environments to keep docs
+# publishing disabled there.
+ANGELA = {
+    "WORKDIR": os.environ.get("ANGELA_WORKDIR", "/tmp/angela"),
+    "DEFAULT_TARGET": os.environ.get("ANGELA_DEFAULT_TARGET", "demo"),
+    "MAX_FIX_ITERATIONS": int(os.environ.get("ANGELA_MAX_FIX_ITERATIONS", "3")),
+    "CMD_TIMEOUT": int(os.environ.get("ANGELA_CMD_TIMEOUT", "600")),
+    "TARGETS": {
+        "demo": {
+            "clone_url": os.environ.get(
+                "ANGELA_DEMO_CLONE_URL", "https://github.com/ne4ek/autodoc.git"
+            ),
+            "default_branch": os.environ.get("ANGELA_DEMO_BRANCH", "main"),
+            "language": "python",
+            "test_cmd": os.environ.get("ANGELA_DEMO_TEST_CMD", "python -m pytest -q"),
+            "install_cmd": os.environ.get(
+                "ANGELA_DEMO_INSTALL_CMD", "pip install -r requirements.txt"
+            ),
+            "staging_deploy_cmd": os.environ.get("ANGELA_DEMO_STAGING_CMD", ""),
+            "prod_deploy_cmd": os.environ.get("ANGELA_DEMO_PROD_CMD", ""),
+            "staging_url": os.environ.get("ANGELA_DEMO_STAGING_URL", ""),
+            "prod_url": os.environ.get("ANGELA_DEMO_PROD_URL", ""),
+        },
+    },
+    "WIKI": {
+        "base_url": os.environ.get("ANGELA_WIKI_URL", "http://localhost:8080"),
+        "username": os.environ.get("ANGELA_WIKI_USER", "Angela"),
+        "password": os.environ.get("ANGELA_WIKI_PASSWORD", ""),
+        "enabled": os.environ.get("ANGELA_WIKI_ENABLED", "true").lower() == "true",
+    },
+}

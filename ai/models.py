@@ -821,3 +821,233 @@ class TeamVelocity(models.Model):
 
     def __str__(self) -> str:
         return f"Velocity({self.user_id}, {self.task_type})"
+
+
+# ---------------------------------------------------------------------------
+# Angela — autonomous coding agent (sandbox-scoped)
+# ---------------------------------------------------------------------------
+#
+# Angela takes a Plane Issue (or a freeform prompt) and runs a full
+# code→self-review→test→deploy loop against an ISOLATED sandbox/demo
+# repository (never the user's prod repo, never this planeAI codebase —
+# see the deliberate scope decision: sandbox only). She can also emit
+# project documentation to a (locally-hosted) MediaWiki.
+#
+# Two tables, both in our `ai` schema (CLAUDE.md invariant 6):
+#
+#   AngelaRun   — one end-to-end run, with the chosen deploy strategy
+#   AngelaStep  — append-only per-phase log inside a run (for the feed)
+#
+# Both carry workspace_id so isolation (invariant 1) is enforced at the
+# DB level, not just the view. The sandbox repo is identified by a
+# logical key (`target_repo`), resolved to a concrete clone URL by
+# settings (ai.angela.sandbox) — we never trust a client-supplied URL.
+
+
+class AngelaRun(models.Model):
+    """One autonomous Angela run over the sandbox repo.
+
+    Lifecycle (``status``)::
+
+        queued → coding → reviewing → testing ─┬→ deploying → succeeded
+                    ↑__________________________│              ↘ failed
+                       (bounded fix loop)       └→ awaiting_approval
+                                                     (staging+gate mode,
+                                                      prod deploy waits
+                                                      for a human button)
+
+    ``deploy_mode`` picks one of the three strategies surfaced as
+    separate buttons in the UI. All three operate ONLY on the sandbox,
+    so even ``autonomous_prod`` cannot touch a real production system.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    workspace = models.ForeignKey(
+        "db.Workspace",
+        on_delete=models.CASCADE,
+        related_name="ai_angela_runs",
+    )
+    project = models.ForeignKey(
+        "db.Project",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="ai_angela_runs",
+    )
+    # Plane Issue that seeded the run (when launched from a work item).
+    # Loose UUID — the Issue may be soft-deleted later; the run history
+    # must survive.
+    issue_id = models.UUIDField(null=True, blank=True)
+
+    # Logical sandbox key (e.g. "demo"), NOT a client URL. Resolved to a
+    # concrete clone path/URL by ai.angela.sandbox.resolve_target().
+    target_repo = models.CharField(max_length=120, default="demo")
+    prompt = models.TextField(blank=True, default="")
+
+    MODE_STAGING_GATE = "staging_gate"      # auto→staging, prod needs approval
+    MODE_AUTONOMOUS_PROD = "autonomous_prod"  # auto all the way to (sandbox) prod
+    MODE_MANUAL = "manual"                    # code+review+test, deploy by hand
+    MODE_CHOICES = (
+        (MODE_STAGING_GATE, "staging_gate"),
+        (MODE_AUTONOMOUS_PROD, "autonomous_prod"),
+        (MODE_MANUAL, "manual"),
+    )
+    deploy_mode = models.CharField(
+        max_length=20, choices=MODE_CHOICES, default=MODE_STAGING_GATE
+    )
+
+    STATUS_QUEUED = "queued"
+    STATUS_CODING = "coding"
+    STATUS_REVIEWING = "reviewing"
+    STATUS_TESTING = "testing"
+    STATUS_DEPLOYING = "deploying"
+    STATUS_AWAITING_APPROVAL = "awaiting_approval"
+    STATUS_SUCCEEDED = "succeeded"
+    STATUS_FAILED = "failed"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_CHOICES = (
+        (STATUS_QUEUED, "queued"),
+        (STATUS_CODING, "coding"),
+        (STATUS_REVIEWING, "reviewing"),
+        (STATUS_TESTING, "testing"),
+        (STATUS_DEPLOYING, "deploying"),
+        (STATUS_AWAITING_APPROVAL, "awaiting_approval"),
+        (STATUS_SUCCEEDED, "succeeded"),
+        (STATUS_FAILED, "failed"),
+        (STATUS_CANCELLED, "cancelled"),
+    )
+    status = models.CharField(
+        max_length=24, choices=STATUS_CHOICES, default=STATUS_QUEUED
+    )
+
+    branch = models.CharField(max_length=160, blank=True, default="")
+    diff = models.TextField(blank=True, default="")
+
+    VERDICT_PENDING = "pending"
+    VERDICT_APPROVED = "approved"
+    VERDICT_CHANGES = "changes_requested"
+    VERDICT_CHOICES = (
+        (VERDICT_PENDING, "pending"),
+        (VERDICT_APPROVED, "approved"),
+        (VERDICT_CHANGES, "changes_requested"),
+    )
+    review_verdict = models.CharField(
+        max_length=20, choices=VERDICT_CHOICES, default=VERDICT_PENDING
+    )
+
+    test_passed = models.BooleanField(null=True, blank=True)
+    test_summary = models.TextField(blank=True, default="")
+    # How many code→review→test iterations the fix loop consumed.
+    iterations = models.IntegerField(default=0)
+
+    deploy_target = models.CharField(max_length=20, blank=True, default="")
+    deploy_url = models.CharField(max_length=300, blank=True, default="")
+    wiki_url = models.CharField(max_length=300, blank=True, default="")
+    error = models.TextField(blank=True, default="")
+
+    created_by = models.ForeignKey(
+        "db.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ai_angela_runs_created",
+    )
+    # Human who approved the prod deploy in staging+gate mode.
+    approved_by = models.ForeignKey(
+        "db.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ai_angela_runs_approved",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "ai_angela_run"
+        verbose_name = "Angela run"
+        verbose_name_plural = "Angela runs"
+        indexes = [
+            models.Index(
+                fields=["workspace", "created_at"],
+                name="ai_angela_ws_time_idx",
+            ),
+            models.Index(
+                fields=["status"],
+                name="ai_angela_status_idx",
+            ),
+            models.Index(
+                fields=["issue_id"],
+                name="ai_angela_issue_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"AngelaRun({self.id}, {self.status}, {self.deploy_mode})"
+
+
+class AngelaStep(models.Model):
+    """Append-only per-phase log line inside an :class:`AngelaRun`.
+
+    Powers the live run feed in the Angela console. We never mutate a
+    step after writing it — a phase that retries writes a NEW step with
+    an incremented ``iteration``, mirroring the audit-trail discipline
+    of AgentAction / AIAgentActionLog.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    run = models.ForeignKey(
+        "ai.AngelaRun",
+        on_delete=models.CASCADE,
+        related_name="steps",
+    )
+    # Denormalised for workspace-scoped queries without joining the run.
+    workspace_id = models.UUIDField(db_index=True)
+
+    PHASE_PLAN = "plan"
+    PHASE_CODE = "code"
+    PHASE_REVIEW = "review"
+    PHASE_TEST = "test"
+    PHASE_DEPLOY = "deploy"
+    PHASE_DOCS = "docs"
+    PHASE_CHOICES = (
+        (PHASE_PLAN, "plan"),
+        (PHASE_CODE, "code"),
+        (PHASE_REVIEW, "review"),
+        (PHASE_TEST, "test"),
+        (PHASE_DEPLOY, "deploy"),
+        (PHASE_DOCS, "docs"),
+    )
+    phase = models.CharField(max_length=12, choices=PHASE_CHOICES)
+
+    STATUS_STARTED = "started"
+    STATUS_OK = "ok"
+    STATUS_FAILED = "failed"
+    STATUS_SKIPPED = "skipped"
+    STATUS_CHOICES = (
+        (STATUS_STARTED, "started"),
+        (STATUS_OK, "ok"),
+        (STATUS_FAILED, "failed"),
+        (STATUS_SKIPPED, "skipped"),
+    )
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES)
+
+    title = models.CharField(max_length=200, blank=True, default="")
+    # Truncated rationale / command output. Cap at ~8KB in the writer.
+    detail = models.TextField(blank=True, default="")
+    iteration = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "ai_angela_step"
+        verbose_name = "Angela step"
+        verbose_name_plural = "Angela steps"
+        indexes = [
+            models.Index(
+                fields=["run", "created_at"],
+                name="ai_angela_step_run_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"AngelaStep({self.phase}/{self.status})"

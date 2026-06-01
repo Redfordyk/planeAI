@@ -1,0 +1,57 @@
+# Local MediaWiki for Angela's documentation output.
+#
+# Per the product decision, this wiki runs LOCALLY on a developer PC —
+# NOT on the server. Angela's docgen phase analyses the sandbox repo and
+# publishes pages here via the MediaWiki API.
+#
+# Quick start (on your PC):
+#   cd Angela/wiki
+#   cp .env.example .env        # set MW_ADMIN_PASS
+#   docker compose up -d
+#   # open http://localhost:8080 and run the web installer once,
+#   # OR drop a prepared LocalSettings.php next to this file.
+#
+# Then point the backend at it:
+#   ANGELA_WIKI_URL=http://host.docker.internal:8080   (api container → host)
+#   ANGELA_WIKI_URL=http://localhost:8080              (backend on the same host)
+#   ANGELA_WIKI_USER=Angela
+#   ANGELA_WIKI_PASSWORD=<a bot password created in Special:BotPasswords>
+
+services:
+  wiki-db:
+    image: mariadb:11
+    container_name: angela-wiki-db
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${MW_DB_NAME:-mediawiki}
+      MARIADB_USER: ${MW_DB_USER:-wikiuser}
+      MARIADB_PASSWORD: ${MW_DB_PASS:-wikipass}
+      MARIADB_ROOT_PASSWORD: ${MW_DB_ROOT_PASS:-rootpass}
+    volumes:
+      - wiki_db:/var/lib/mysql
+    networks:
+      - angela-wiki
+
+  wiki:
+    image: mediawiki:1.43
+    container_name: angela-wiki
+    restart: unless-stopped
+    depends_on:
+      - wiki-db
+    ports:
+      - "${MW_PORT:-8080}:80"
+    volumes:
+      # Persist uploaded images + (optionally) a committed LocalSettings.php
+      - wiki_images:/var/www/html/images
+      # Uncomment after first-run install to pin configuration:
+      # - ./LocalSettings.php:/var/www/html/LocalSettings.php:ro
+    networks:
+      - angela-wiki
+
+volumes:
+  wiki_db:
+  wiki_images:
+
+networks:
+  angela-wiki:
+    driver: bridge

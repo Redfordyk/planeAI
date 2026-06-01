@@ -41,6 +41,15 @@ from ai.views import (
     SummarizeIssueView,
     TranscribeView,
 )
+from ai.angela.api import (
+    AngelaApproveView,
+    AngelaCancelView,
+    AngelaDocsView,
+    AngelaManualDeployView,
+    AngelaRunDetailView,
+    AngelaRunListCreateView,
+    AngelaTargetsView,
+)
 
 
 app_name = "ai"
@@ -164,5 +173,41 @@ urlpatterns = [
         "workspaces/<uuid:workspace_id>/orchestrator/trigger/analyst/",
         TriggerAnalystView.as_view(),
         name="orch-trigger-analyst",
+    ),
+    # --- Angela: autonomous coding agent (sandbox) ------------------
+    path(
+        "workspaces/<uuid:workspace_id>/angela/targets/",
+        AngelaTargetsView.as_view(),
+        name="angela-targets",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/angela/runs/",
+        AngelaRunListCreateView.as_view(),
+        name="angela-runs",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/angela/runs/<uuid:run_id>/",
+        AngelaRunDetailView.as_view(),
+        name="angela-run-detail",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/angela/runs/<uuid:run_id>/approve/",
+        AngelaApproveView.as_view(),
+        name="angela-run-approve",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/angela/runs/<uuid:run_id>/deploy/",
+        AngelaManualDeployView.as_view(),
+        name="angela-run-deploy",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/angela/runs/<uuid:run_id>/cancel/",
+        AngelaCancelView.as_view(),
+        name="angela-run-cancel",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/angela/docs/",
+        AngelaDocsView.as_view(),
+        name="angela-docs",
     ),
 ]
