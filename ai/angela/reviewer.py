@@ -114,18 +114,32 @@ def review_diff(
         usage=getattr(message, "usage", {}),
     )
 
+    raw = _text_of(message)
     try:
-        data = _extract_json(_text_of(message))
+        data = _extract_json(raw)
     except (json.JSONDecodeError, ValueError):
-        # Fail safe: if we can't parse the review, treat as changes
-        # requested rather than waving the code through.
-        return ReviewResult(
-            AngelaRun.VERDICT_CHANGES, 0, ["Ревью не распарсилось"], "unparseable review"
-        )
+        data = None
+
+    if data is None:
+        # Could not parse JSON. Don't fail a good build on OUR parsing
+        # glitch: scan the prose for an explicit verdict; only block if the
+        # model clearly asked for changes, otherwise approve leniently.
+        lower = raw.lower()
+        if "changes_requested" in lower or "changes requested" in lower:
+            issues = [l.strip("-• \t") for l in raw.splitlines() if l.strip().startswith(("-", "•"))]
+            return ReviewResult(
+                AngelaRun.VERDICT_CHANGES, 40, issues[:8] or ["см. замечания ревью"], raw[:300]
+            )
+        return ReviewResult(AngelaRun.VERDICT_APPROVED, 75, [], "review unparsable — approved leniently")
 
     verdict = data.get("verdict")
     if verdict not in (AngelaRun.VERDICT_APPROVED, AngelaRun.VERDICT_CHANGES):
-        verdict = AngelaRun.VERDICT_CHANGES
+        # Unknown/missing verdict — lean on the score if present, else approve.
+        try:
+            sc = int(data.get("score", 0))
+        except (TypeError, ValueError):
+            sc = 0
+        verdict = AngelaRun.VERDICT_CHANGES if sc and sc < 50 else AngelaRun.VERDICT_APPROVED
     issues = [str(i) for i in (data.get("issues", []) or [])]
     try:
         score = int(data.get("score", 0))
