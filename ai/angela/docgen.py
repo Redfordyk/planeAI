@@ -22,8 +22,8 @@ from typing import Optional
 
 import requests
 
+from ai import providers
 from ai.models import AIUsageLog
-from ai.providers import get_chat
 from ai.usage import record_usage
 
 from .config import wiki_config
@@ -98,7 +98,7 @@ def _analyze_file(path: Path, root: Path) -> Optional[dict]:
 def _overview_via_llm(workspace_id, user_id, model: str, structure: dict) -> str:
     """One short LLM-written project overview. Best-effort; empty on failure."""
     try:
-        chat = get_chat(workspace_id)
+        chat = providers.get_chat(workspace_id)
         names = ", ".join(f["path"] for f in structure["files"][:40])
         msg = chat.complete(
             system="Ты — технический писатель. Дай краткое (3-5 предложений) описание "

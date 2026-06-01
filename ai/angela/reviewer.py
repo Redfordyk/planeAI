@@ -16,8 +16,8 @@ import json
 import logging
 import re
 
+from ai import providers
 from ai.models import AIUsageLog, AngelaRun
-from ai.providers import get_chat
 from ai.usage import record_usage
 
 
@@ -94,7 +94,7 @@ def review_diff(
             AngelaRun.VERDICT_CHANGES, 0, ["Пустой diff — изменения не сгенерированы"], "no diff"
         )
 
-    chat = get_chat(workspace_id)
+    chat = providers.get_chat(workspace_id)
     user_content = (
         "## Задача\n" + (issue_text or "").strip()
         + "\n\n## Diff\n```diff\n" + diff[:24000] + "\n```"

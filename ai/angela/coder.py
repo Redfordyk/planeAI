@@ -19,8 +19,8 @@ import logging
 import re
 from dataclasses import dataclass, field
 
+from ai import providers
 from ai.models import AIUsageLog
-from ai.providers import get_chat
 from ai.usage import record_usage
 
 
@@ -105,7 +105,11 @@ def generate_code(
     ``review_feedback`` is set on fix iterations — we feed the previous
     self-review's objections back so the model converges.
     """
-    chat = get_chat(workspace_id)
+    # Resolve dynamically so the planeai_runtime overlay (which reassigns
+    # ``providers.get_chat`` to a DeepSeek-backed client at app-ready) is
+    # honoured — importing the name at module load would freeze the
+    # original Anthropic client.
+    chat = providers.get_chat(workspace_id)
 
     user_blocks = [
         "## Задача\n" + (issue_text or "").strip(),
