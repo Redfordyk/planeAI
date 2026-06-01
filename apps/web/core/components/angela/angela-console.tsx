@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Rocket,
   ShieldCheck,
+  Sparkles,
   XCircle,
 } from "lucide-react";
 // plane imports
@@ -61,6 +62,16 @@ type DeployModeButton = {
   subtitle: string;
   chip: string;
 };
+
+// One-click idea presets — the "even a non-technical user" front door.
+// Each fills the task box with a rich, ready-to-build prompt.
+const IDEAS: { emoji: string; labelKey: string; promptKey: string }[] = [
+  { emoji: "🛬", labelKey: "angela.idea_landing_label", promptKey: "angela.idea_landing_prompt" },
+  { emoji: "🧑‍💼", labelKey: "angela.idea_portfolio_label", promptKey: "angela.idea_portfolio_prompt" },
+  { emoji: "✅", labelKey: "angela.idea_todo_label", promptKey: "angela.idea_todo_prompt" },
+  { emoji: "🎮", labelKey: "angela.idea_game_label", promptKey: "angela.idea_game_prompt" },
+  { emoji: "🍔", labelKey: "angela.idea_menu_label", promptKey: "angela.idea_menu_prompt" },
+];
 
 export function AngelaConsole() {
   const { t } = useTranslation();
@@ -243,57 +254,94 @@ export function AngelaConsole() {
               className="w-full resize-y rounded-md border border-subtle-1 bg-layer-1 p-2.5 text-13 text-primary placeholder:text-placeholder outline-none transition-colors focus:border-accent-primary"
             />
 
-            <div className="mt-3 flex items-center gap-2">
-              <label className="text-12 text-tertiary">{t("angela.target_label")}</label>
-              <select
-                value={target}
-                onChange={(e) => setTarget(e.target.value)}
-                className="rounded-md border border-subtle-1 bg-layer-1 px-2 py-1 text-12 text-primary outline-none focus:border-accent-primary"
-              >
-                {(targets?.targets ?? []).map((tk) => (
-                  <option key={tk} value={tk}>
-                    {tk}
-                  </option>
+            {/* one-click idea presets */}
+            <div className="mt-2.5">
+              <span className="text-11 text-tertiary">{t("angela.ideas_label")}</span>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {IDEAS.map((idea) => (
+                  <button
+                    key={idea.labelKey}
+                    type="button"
+                    onClick={() => setPrompt(t(idea.promptKey))}
+                    className="rounded-full border border-subtle-1 bg-layer-2 px-2.5 py-1 text-11 text-secondary transition-colors hover:border-accent-primary hover:text-accent-primary"
+                  >
+                    {idea.emoji} {t(idea.labelKey)}
+                  </button>
                 ))}
-              </select>
+              </div>
             </div>
 
-            <div className="mt-4 flex flex-col gap-2">
-              <span className="text-11 font-medium uppercase tracking-wide text-tertiary">
-                {t("angela.deploy_mode_label")}
-              </span>
-              {modeButtons.map((b) => (
-                <button
-                  key={b.mode}
-                  disabled={busy}
-                  onClick={() => launch(b.mode)}
-                  className={cn(
-                    "group flex items-center gap-3 rounded-md border border-subtle-1 bg-layer-1 px-3 py-2.5 text-left transition-colors",
-                    "hover:bg-layer-2 disabled:pointer-events-none disabled:opacity-50"
-                  )}
-                >
-                  <span className={cn("flex size-7 flex-shrink-0 items-center justify-center rounded-md", b.chip)}>
-                    {b.icon}
-                  </span>
-                  <span className="flex min-w-0 flex-col">
-                    <span className="text-13 font-medium text-primary">{b.title}</span>
-                    <span className="text-11 text-tertiary">{b.subtitle}</span>
-                  </span>
-                  <PlayCircle className="ml-auto size-4 flex-shrink-0 text-tertiary transition-colors group-hover:text-accent-primary" />
-                </button>
-              ))}
-            </div>
-
+            {/* easy mode: one big button */}
             <Button
-              variant="secondary"
-              size="lg"
+              variant="primary"
+              size="xl"
               className="mt-3 w-full"
               disabled={busy}
-              onClick={doDocs}
-              prependIcon={<FileText />}
+              onClick={() => launch("autonomous_prod")}
+              prependIcon={busy ? <Loader2 className="animate-spin" /> : <Sparkles />}
             >
-              {t("angela.generate_docs")}
+              {busy ? t("angela.creating") : t("angela.create_button")}
             </Button>
+            <p className="mt-1.5 text-11 text-tertiary">{t("angela.easy_hint")}</p>
+
+            {/* advanced: target + explicit deploy modes + docs */}
+            <details className="mt-3 border-t border-subtle-1 pt-3">
+              <summary className="cursor-pointer text-11 font-medium uppercase tracking-wide text-tertiary">
+                {t("angela.advanced_label")}
+              </summary>
+
+              <div className="mt-3 flex items-center gap-2">
+                <label className="text-12 text-tertiary">{t("angela.target_label")}</label>
+                <select
+                  value={target}
+                  onChange={(e) => setTarget(e.target.value)}
+                  className="rounded-md border border-subtle-1 bg-layer-1 px-2 py-1 text-12 text-primary outline-none focus:border-accent-primary"
+                >
+                  {(targets?.targets ?? []).map((tk) => (
+                    <option key={tk} value={tk}>
+                      {tk}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="mt-3 flex flex-col gap-2">
+                <span className="text-11 font-medium uppercase tracking-wide text-tertiary">
+                  {t("angela.deploy_mode_label")}
+                </span>
+                {modeButtons.map((b) => (
+                  <button
+                    key={b.mode}
+                    disabled={busy}
+                    onClick={() => launch(b.mode)}
+                    className={cn(
+                      "group flex items-center gap-3 rounded-md border border-subtle-1 bg-layer-1 px-3 py-2.5 text-left transition-colors",
+                      "hover:bg-layer-2 disabled:pointer-events-none disabled:opacity-50"
+                    )}
+                  >
+                    <span className={cn("flex size-7 flex-shrink-0 items-center justify-center rounded-md", b.chip)}>
+                      {b.icon}
+                    </span>
+                    <span className="flex min-w-0 flex-col">
+                      <span className="text-13 font-medium text-primary">{b.title}</span>
+                      <span className="text-11 text-tertiary">{b.subtitle}</span>
+                    </span>
+                    <PlayCircle className="ml-auto size-4 flex-shrink-0 text-tertiary transition-colors group-hover:text-accent-primary" />
+                  </button>
+                ))}
+              </div>
+
+              <Button
+                variant="secondary"
+                size="lg"
+                className="mt-3 w-full"
+                disabled={busy}
+                onClick={doDocs}
+                prependIcon={<FileText />}
+              >
+                {t("angela.generate_docs")}
+              </Button>
+            </details>
 
             {error && <p className="mt-2 text-12 text-danger-primary">{error}</p>}
           </div>
@@ -397,6 +445,31 @@ export function AngelaConsole() {
                 </div>
                 {selected.error && <p className="mt-2 text-11 text-danger-primary">{selected.error}</p>}
               </div>
+
+              {/* live preview of the deployed result */}
+              {selected.deploy_url && selected.status === "succeeded" && (
+                <div className="border-b border-subtle-1">
+                  <div className="flex items-center justify-between px-4 py-2">
+                    <span className="text-11 font-medium uppercase tracking-wide text-tertiary">
+                      {t("angela.preview_label")}
+                    </span>
+                    <a
+                      href={selected.deploy_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-11 font-medium text-link-primary hover:text-link-primary-hover"
+                    >
+                      {t("angela.preview_open")} ↗
+                    </a>
+                  </div>
+                  <iframe
+                    title="angela-preview"
+                    src={selected.deploy_url}
+                    className="h-[360px] w-full border-0 bg-white"
+                    sandbox="allow-scripts allow-same-origin"
+                  />
+                </div>
+              )}
 
               {/* step feed */}
               <ol className="flex-1 space-y-3 overflow-y-auto p-4">

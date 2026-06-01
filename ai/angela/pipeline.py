@@ -27,7 +27,7 @@ import logging
 
 from ai.models import AngelaRun, AngelaStep
 
-from . import coder, deployer, docgen, reviewer
+from . import coder, deployer, docgen, intake, reviewer
 from .base import fail_run, log_step, set_status
 from .config import AngelaConfigError, max_fix_iterations, resolve_target
 from .sandbox import Sandbox, open_sandbox
@@ -64,7 +64,17 @@ def run_pipeline(run_id: str, *, run_docs: bool = True) -> None:
                  title=f"sandbox ready on branch {branch}")
 
         file_tree = sandbox.file_tree()
-        issue_text = run.prompt or ""
+
+        # --- intake: expand the casual idea into a real brief -------
+        log_step(run, phase=AngelaStep.PHASE_PLAN, status=AngelaStep.STATUS_STARTED,
+                 title="понимаю задачу")
+        brief = intake.expand_brief(
+            workspace_id=run.workspace_id, user_id=run.created_by_id,
+            idea=run.prompt or "", model=model,
+        )
+        issue_text = brief or (run.prompt or "")
+        log_step(run, phase=AngelaStep.PHASE_PLAN, status=AngelaStep.STATUS_OK,
+                 title="поняла задачу так", detail=brief)
 
         # --- code ↔ self-review loop --------------------------------
         cap = max_fix_iterations()

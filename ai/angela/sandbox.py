@@ -87,18 +87,29 @@ class Sandbox:
     # --- lifecycle --------------------------------------------------
 
     def prepare(self) -> None:
-        """Clone (shallow) the target into a fresh per-run directory.
+        """Make a fresh per-run working tree: clone the target repo, or —
+        when the target has no ``clone_url`` (a "blank" scaffold) — init an
+        empty git repo so the model builds from a clean slate.
 
-        If the directory already exists (re-run), it is wiped first so a
-        run always starts from a clean tree.
+        If the directory already exists (re-run), it is wiped first.
         """
-        if not self.target.clone_url:
-            raise AngelaConfigError(
-                f"target '{self.target.key}' has no clone_url configured"
-            )
         if self.root.exists():
             shutil.rmtree(self.root, ignore_errors=True)
         self.root.parent.mkdir(parents=True, exist_ok=True)
+
+        if not self.target.clone_url:
+            # Blank scaffold: empty repo + a minimal README so there's an
+            # initial commit and tree to branch from.
+            self.root.mkdir(parents=True, exist_ok=True)
+            self._git("init", "-b", self.target.default_branch or "main")
+            self._set_identity()
+            (self.root / "README.md").write_text(
+                "# Project scaffold\n\nBuilt by Angela.\n", encoding="utf-8"
+            )
+            self._git("add", "-A")
+            self._git("commit", "-m", "scaffold", allow_fail=True)
+            return
+
         res = self._run_raw(
             ["git", "clone", "--depth", "1", "--branch", self.target.default_branch,
              self.target.clone_url, str(self.root)],
@@ -112,6 +123,9 @@ class Sandbox:
             )
         if not res.ok:
             raise AngelaConfigError(f"clone failed: {res.tail()}")
+        self._set_identity()
+
+    def _set_identity(self) -> None:
         # Local identity so commits don't fail on a bare container.
         self._git("config", "user.email", "angela@planeai.local")
         self._git("config", "user.name", "Angela (AI)")

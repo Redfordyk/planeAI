@@ -75,8 +75,27 @@ _DEFAULTS: dict[str, Any] = {
     # a real clickable link instead of a dry-run no-op.
     "ARTIFACTS_DIR": os.environ.get("ANGELA_ARTIFACTS_DIR", "") or "/srv/angela-artifacts",
     "ARTIFACTS_URL_BASE": os.environ.get("ANGELA_ARTIFACTS_URL_BASE", ""),
-    "DEFAULT_TARGET": "demo",
+    # Easy mode default: a blank scaffold so a casual idea starts from a
+    # clean slate (not the autodoc demo repo). Tests run only if the model
+    # actually produced any — static sites won't fail on pytest.
+    "DEFAULT_TARGET": os.environ.get("ANGELA_DEFAULT_TARGET", "") or "blank",
     "TARGETS": {
+        "blank": {
+            "clone_url": "",  # empty → sandbox inits an empty git repo
+            "default_branch": "main",
+            "language": "any",
+            # Run pytest only when test files exist; otherwise pass. Keeps
+            # static HTML builds from failing on an irrelevant test runner.
+            "test_cmd": (
+                "if ls tests/*.py test_*.py *_test.py 2>/dev/null | grep -q .; "
+                "then python -m pytest -q; else echo 'no tests — skipped'; fi"
+            ),
+            "install_cmd": "",
+            "staging_deploy_cmd": "",
+            "prod_deploy_cmd": "",
+            "staging_url": "",
+            "prod_url": "",
+        },
         # Ships pointing at the autodoc demo repo so a fresh install has
         # *something* to exercise. Override in settings for real use.
         "demo": {
