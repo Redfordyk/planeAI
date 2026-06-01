@@ -249,8 +249,15 @@ def _verify_reachable(run: AngelaRun) -> None:
         resp = requests.get(run.deploy_url, timeout=15)
         body = resp.content or b""
         size = len(body)
+        # nginx autoindex (a project with no index.html, e.g. a Python
+        # script) → that's not a "web page", the deliverable is the ZIP.
+        is_dir_listing = b"<title>Index of /" in body[:400] or b"<h1>Index of /" in body[:600]
         ok = resp.status_code == 200 and size > 200 and b"<" in body
-        if ok:
+        if resp.status_code == 200 and is_dir_listing:
+            log_step(run, phase=AngelaStep.PHASE_DEPLOY, status=AngelaStep.STATUS_OK,
+                     title="проект без веб-страницы — скачайте ZIP",
+                     detail="Это код/файлы, а не сайт. Готовый проект доступен по кнопке «Скачать ZIP».")
+        elif ok:
             log_step(run, phase=AngelaStep.PHASE_DEPLOY, status=AngelaStep.STATUS_OK,
                      title=f"страница открывается ✓ ({size / 1024:.1f} КБ)",
                      detail=f"GET {run.deploy_url} → {resp.status_code}, {size} bytes")
