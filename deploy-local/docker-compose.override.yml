@@ -35,3 +35,18 @@ services:
     environment:
       DJANGO_SETTINGS_MODULE: plane.settings.production_ai
       FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+
+  # --- PGTU conference (additive): route pgtu.site.volodyatvoybank.com.ru
+  #     through Plane's Caddy. Mounts an extended Caddyfile (Plane original +
+  #     one extra vhost) and adds host.docker.internal so Caddy can reach the
+  #     conference nginx published on the host at :8080. Plane routing unchanged.
+  proxy:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - proxy_config:/config
+      - proxy_data:/data
+      - /opt/pgtu-site/proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+
+volumes:
+  pgdata:
