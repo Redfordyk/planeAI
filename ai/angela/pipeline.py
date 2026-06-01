@@ -213,6 +213,9 @@ def run_pipeline(run_id: str, *, run_docs: bool = True) -> None:
         set_status(run, AngelaRun.STATUS_DEPLOYING)
         deployer.run_deploy(run, sandbox)
 
+        # --- verify the deployed page actually opens ----------------
+        _verify_reachable(run)
+
         # --- docs (best-effort) -------------------------------------
         if run_docs:
             _try_docs(run, sandbox, model)
@@ -230,6 +233,34 @@ def run_pipeline(run_id: str, *, run_docs: bool = True) -> None:
         finally:
             if sandbox is not None:
                 sandbox.cleanup()
+
+
+def _verify_reachable(run: AngelaRun) -> None:
+    """Best-effort: fetch the deployed URL and confirm the page actually
+    opens (200 + non-trivial HTML). Logged as a step; never fails the run
+    — the artifact already exists and a fetch hiccup shouldn't undo a
+    green build."""
+    run.refresh_from_db(fields=["status", "deploy_url"])
+    if run.status != AngelaRun.STATUS_SUCCEEDED or not run.deploy_url:
+        return
+    try:
+        import requests
+
+        resp = requests.get(run.deploy_url, timeout=15)
+        body = resp.content or b""
+        size = len(body)
+        ok = resp.status_code == 200 and size > 200 and b"<" in body
+        if ok:
+            log_step(run, phase=AngelaStep.PHASE_DEPLOY, status=AngelaStep.STATUS_OK,
+                     title=f"страница открывается ✓ ({size / 1024:.1f} КБ)",
+                     detail=f"GET {run.deploy_url} → {resp.status_code}, {size} bytes")
+        else:
+            log_step(run, phase=AngelaStep.PHASE_DEPLOY, status=AngelaStep.STATUS_SKIPPED,
+                     title="страница ответила неожиданно",
+                     detail=f"GET {run.deploy_url} → {resp.status_code}, {size} bytes")
+    except Exception as exc:  # noqa: BLE001 — verification is best-effort
+        log_step(run, phase=AngelaStep.PHASE_DEPLOY, status=AngelaStep.STATUS_SKIPPED,
+                 title="не смогла проверить открытие страницы", detail=str(exc)[:300])
 
 
 def approve_prod_deploy(run_id: str, approver_id) -> bool:

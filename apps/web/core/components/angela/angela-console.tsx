@@ -236,6 +236,21 @@ export function AngelaConsole() {
     }
   }, [api, selected, openRun]);
 
+  const doCancel = useCallback(async () => {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      const updated = await api.cancelRun(selected.id);
+      setSelected(updated);
+      setRuns((prev) => prev.map((x) => (x.id === updated.id ? { ...x, status: updated.status } : x)));
+      stopPoll();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [api, selected, stopPoll]);
+
   const refreshRuns = useCallback(() => {
     api.listRuns().then(setRuns).catch((e) => setError(String(e)));
   }, [api]);
@@ -458,6 +473,16 @@ export function AngelaConsole() {
 
                 {/* contextual action row */}
                 <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                  {!isTerminal(selected.status) && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={doCancel}
+                      className="flex items-center gap-1 text-12 font-medium text-danger-primary hover:opacity-80 disabled:opacity-50"
+                    >
+                      <XCircle className="size-3.5" /> {t("angela.cancel")}
+                    </button>
+                  )}
                   {selected.status === "awaiting_approval" && (
                     <Button variant="primary" size="sm" disabled={busy} onClick={doApprove} prependIcon={<ShieldCheck />}>
                       {t("angela.approve_prod")}
