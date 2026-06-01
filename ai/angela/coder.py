@@ -109,11 +109,14 @@ def generate_code(
     model: str,
     review_feedback: str | None = None,
     prior_summary: str | None = None,
+    existing_files: dict[str, str] | None = None,
 ) -> CodePlan:
     """Ask Claude for a :class:`CodePlan`.
 
     ``review_feedback`` is set on fix iterations — we feed the previous
     self-review's objections back so the model converges.
+    ``existing_files`` (path → content) is set on refinement runs so the
+    model edits the prior result rather than starting over.
     """
     # Resolve dynamically so the planeai_runtime overlay (which reassigns
     # ``providers.get_chat`` to a DeepSeek-backed client at app-ready) is
@@ -125,6 +128,14 @@ def generate_code(
         "## Задача\n" + (issue_text or "").strip(),
         "## Файлы репозитория (sandbox)\n" + "\n".join(file_tree[:300]),
     ]
+    if existing_files:
+        existing_block = "\n\n".join(
+            f"--- {path} ---\n{content}" for path, content in existing_files.items()
+        )
+        user_blocks.append(
+            "## Текущее содержимое файлов (отредактируй их, верни ПОЛНЫЕ версии)\n"
+            + existing_block[:40000]
+        )
     if prior_summary:
         user_blocks.append("## Предыдущая попытка\n" + prior_summary)
     if review_feedback:

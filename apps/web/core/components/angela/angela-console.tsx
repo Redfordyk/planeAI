@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bot,
   CheckCircle2,
+  Download,
   FileText,
   GitBranch,
   Loader2,
@@ -18,6 +19,7 @@ import {
   Rocket,
   ShieldCheck,
   Sparkles,
+  Wand2,
   XCircle,
 } from "lucide-react";
 // plane imports
@@ -86,6 +88,7 @@ export function AngelaConsole() {
   const [selected, setSelected] = useState<AngelaRun | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refinePrompt, setRefinePrompt] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // --- bootstrap -------------------------------------------------------
@@ -197,6 +200,41 @@ export function AngelaConsole() {
       setBusy(false);
     }
   }, [api, target, openRun]);
+
+  const doRefine = useCallback(async () => {
+    if (!selected || !refinePrompt.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const child = await api.refine(selected.id, refinePrompt.trim());
+      setRefinePrompt("");
+      setRuns((prev) => [child, ...prev]);
+      await openRun(child.id);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [api, selected, refinePrompt, openRun]);
+
+  const doVariation = useCallback(async () => {
+    if (!selected) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const run = await api.startRun({
+        prompt: selected.prompt,
+        target: selected.target_repo,
+        deployMode: "autonomous_prod",
+      });
+      setRuns((prev) => [run, ...prev]);
+      await openRun(run.id);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }, [api, selected, openRun]);
 
   const refreshRuns = useCallback(() => {
     api.listRuns().then(setRuns).catch((e) => setError(String(e)));
@@ -371,9 +409,12 @@ export function AngelaConsole() {
                   >
                     <RunStatusIcon status={r.status} />
                     <span className="flex min-w-0 flex-col">
-                      <span className="truncate text-12 font-medium text-primary">{r.prompt || r.target_repo}</span>
+                      <span className="truncate text-12 font-medium text-primary">
+                        {r.parent_run_id ? "↳ " : ""}
+                        {r.title || r.prompt || r.target_repo}
+                      </span>
                       <span className="text-11 text-tertiary">
-                        {r.deploy_mode} · {r.target_repo}
+                        {r.parent_run_id ? r.prompt : `${r.deploy_mode} · ${r.target_repo}`}
                       </span>
                     </span>
                     <span className={cn("ml-auto text-11 font-medium", STATUS_COLOR[r.status])}>{r.status}</span>
@@ -406,7 +447,14 @@ export function AngelaConsole() {
                     {t("angela.iterations")}: {selected.iterations}
                   </span>
                 </div>
-                <p className="mt-1 truncate text-12 text-secondary">{selected.prompt}</p>
+                {(selected.title || selected.prompt) && (
+                  <p className="mt-1 truncate text-13 font-medium text-primary">
+                    {selected.title || selected.prompt}
+                  </p>
+                )}
+                {selected.title && selected.prompt && (
+                  <p className="truncate text-11 text-tertiary">{selected.prompt}</p>
+                )}
 
                 {/* contextual action row */}
                 <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -432,6 +480,24 @@ export function AngelaConsole() {
                       {t("angela.open_deploy")} ↗
                     </a>
                   )}
+                  {selected.status === "succeeded" && (
+                    <>
+                      <a
+                        href={api.downloadUrl(selected.id)}
+                        className="flex items-center gap-1 text-12 font-medium text-link-primary hover:text-link-primary-hover"
+                      >
+                        <Download className="size-3.5" /> {t("angela.download_zip")}
+                      </a>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={doVariation}
+                        className="flex items-center gap-1 text-12 font-medium text-secondary hover:text-primary disabled:opacity-50"
+                      >
+                        <RefreshCw className="size-3.5" /> {t("angela.variation")}
+                      </button>
+                    </>
+                  )}
                   {selected.wiki_url && (
                     <a
                       href={selected.wiki_url}
@@ -444,6 +510,30 @@ export function AngelaConsole() {
                   )}
                 </div>
                 {selected.error && <p className="mt-2 text-11 text-danger-primary">{selected.error}</p>}
+
+                {/* refine: edit the result with a follow-up instruction */}
+                {selected.status === "succeeded" && selected.deploy_url && (
+                  <div className="mt-3 flex items-center gap-2 rounded-md border border-subtle-1 bg-layer-2 p-2">
+                    <input
+                      value={refinePrompt}
+                      onChange={(e) => setRefinePrompt(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && refinePrompt.trim() && !busy) doRefine();
+                      }}
+                      placeholder={t("angela.refine_placeholder")}
+                      className="min-w-0 flex-1 bg-transparent text-12 text-primary placeholder:text-placeholder outline-none"
+                    />
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={busy || !refinePrompt.trim()}
+                      onClick={doRefine}
+                      prependIcon={busy ? <Loader2 className="animate-spin" /> : <Wand2 />}
+                    >
+                      {t("angela.refine_button")}
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* live preview of the deployed result */}

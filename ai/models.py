@@ -879,6 +879,14 @@ class AngelaRun(models.Model):
     # must survive.
     issue_id = models.UUIDField(null=True, blank=True)
 
+    # When this run is a refinement ("доработать") of an earlier run, the
+    # parent's id. The pipeline seeds the sandbox from the parent's
+    # published artifact so edits build on the prior result. Loose UUID.
+    parent_run_id = models.UUIDField(null=True, blank=True)
+    # Short human title produced by intake (e.g. "Кофейня Уют"), shown in
+    # the UI instead of the raw prompt. Empty until intake fills it.
+    title = models.CharField(max_length=200, blank=True, default="")
+
     # Logical sandbox key (e.g. "demo"), NOT a client URL. Resolved to a
     # concrete clone path/URL by ai.angela.sandbox.resolve_target().
     target_repo = models.CharField(max_length=120, default="demo")

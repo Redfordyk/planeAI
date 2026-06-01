@@ -45,7 +45,9 @@ from ai.angela.api import (
     AngelaApproveView,
     AngelaCancelView,
     AngelaDocsView,
+    AngelaDownloadView,
     AngelaManualDeployView,
+    AngelaRefineView,
     AngelaRunDetailView,
     AngelaRunListCreateView,
     AngelaTargetsView,
@@ -204,6 +206,16 @@ urlpatterns = [
         "workspaces/<uuid:workspace_id>/angela/runs/<uuid:run_id>/cancel/",
         AngelaCancelView.as_view(),
         name="angela-run-cancel",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/angela/runs/<uuid:run_id>/refine/",
+        AngelaRefineView.as_view(),
+        name="angela-run-refine",
+    ),
+    path(
+        "workspaces/<uuid:workspace_id>/angela/runs/<uuid:run_id>/download/",
+        AngelaDownloadView.as_view(),
+        name="angela-run-download",
     ),
     path(
         "workspaces/<uuid:workspace_id>/angela/docs/",

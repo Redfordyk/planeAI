@@ -19,6 +19,7 @@ applies (same as coder/reviewer/docgen).
 from __future__ import annotations
 
 import logging
+import re
 
 from ai import providers
 from ai.models import AIUsageLog
@@ -32,6 +33,10 @@ SYSTEM = """\
 Ты — продакт-аналитик и тимлид. Тебе дают короткую, часто неточную идею от \
 непрофессионала. Преврати её в чёткое, исполнимое техническое задание для \
 разработчика. Пиши по-русски, конкретно, без воды.
+
+Начни ответ с одной строки:
+TITLE: короткое название проекта (2-4 слова, без кавычек)
+затем с новой строки — само ТЗ.
 
 Правила:
 - По умолчанию проектируй самодостаточный СТАТИЧЕСКИЙ сайт/страницу (HTML + CSS, \
@@ -58,12 +63,22 @@ def _text_of(message) -> str:
     return "".join(parts)
 
 
-def expand_brief(*, workspace_id, user_id, idea: str, model: str) -> str:
-    """Return a detailed build brief for ``idea``. On any failure, falls
-    back to the original idea so the pipeline still proceeds."""
+def _split_title(text: str) -> tuple[str, str]:
+    """Pull a leading ``TITLE:`` line out of the model reply."""
+    title = ""
+    m = re.search(r"^\s*TITLE:\s*(.+)$", text, re.MULTILINE)
+    if m:
+        title = m.group(1).strip().strip('"').strip("«»")[:120]
+        text = text[: m.start()] + text[m.end():]
+    return title, text.strip()
+
+
+def expand_brief(*, workspace_id, user_id, idea: str, model: str) -> tuple[str, str]:
+    """Return ``(title, brief)`` for ``idea``. On any failure, falls back
+    to ``("", idea)`` so the pipeline still proceeds."""
     idea = (idea or "").strip()
     if not idea:
-        return ""
+        return "", ""
     try:
         chat = providers.get_chat(workspace_id)
         msg = chat.complete(
@@ -78,11 +93,12 @@ def expand_brief(*, workspace_id, user_id, idea: str, model: str) -> str:
             feature=AIUsageLog.FEATURE_AGENT, model=model,
             usage=getattr(msg, "usage", {}),
         )
-        brief = _text_of(msg).strip()
-        if not brief:
-            return idea
-        # Keep the original ask visible at the top for traceability.
-        return f"Исходная идея пользователя: {idea}\n\nТЗ:\n{brief}"
+        raw = _text_of(msg).strip()
+        if not raw:
+            return "", idea
+        title, brief = _split_title(raw)
+        full = f"Исходная идея пользователя: {idea}\n\nТЗ:\n{brief}"
+        return title, full
     except Exception as exc:  # noqa: BLE001 — intake is best-effort
         logger.info("angela intake failed, using raw idea: %s", exc)
-        return idea
+        return "", idea

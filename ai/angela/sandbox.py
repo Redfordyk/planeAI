@@ -158,6 +158,48 @@ class Sandbox:
         target.relative_to(self.root)
         return target.read_text(encoding="utf-8", errors="replace")
 
+    def seed_from(self, src: Path) -> int:
+        """Copy a previous run's artifact files into this fresh checkout
+        (refinement). Returns how many files were copied; skips VCS junk."""
+        src = Path(src)
+        if not src.exists():
+            return 0
+        count = 0
+        for item in src.rglob("*"):
+            if any(part in (".git", "__pycache__", ".pytest_cache") for part in item.parts):
+                continue
+            if item.is_file():
+                dest = self.root / item.relative_to(src)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(item, dest)
+                count += 1
+        return count
+
+    def snapshot(self, *, max_total: int = 40000, max_files: int = 30) -> dict[str, str]:
+        """Read the текущие text files (path → content) for the coder to
+        edit during a refinement. Bounded so a big project can't blow the
+        prompt; oversized files are elided."""
+        out: dict[str, str] = {}
+        total = 0
+        for rel in self.file_tree():
+            if rel == "README.md":
+                continue
+            p = self.root / rel
+            if not p.is_file():
+                continue
+            try:
+                txt = p.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            if total + len(txt) > max_total:
+                out[rel] = "<...содержимое опущено из-за размера...>"
+                continue
+            out[rel] = txt
+            total += len(txt)
+            if len(out) >= max_files:
+                break
+        return out
+
     def stage_all(self) -> None:
         self._git("add", "-A")
 

@@ -63,18 +63,43 @@ def run_pipeline(run_id: str, *, run_docs: bool = True) -> None:
         log_step(run, phase=AngelaStep.PHASE_PLAN, status=AngelaStep.STATUS_OK,
                  title=f"sandbox ready on branch {branch}")
 
-        file_tree = sandbox.file_tree()
+        existing_files = None
+        if run.parent_run_id:
+            # --- refinement: seed from the parent's published artifact --
+            from .config import artifacts_dir
+            n = sandbox.seed_from(artifacts_dir() / str(run.parent_run_id))
+            sandbox.stage_all()
+            sandbox.commit("seed from parent run")
+            existing_files = sandbox.snapshot()
+            log_step(run, phase=AngelaStep.PHASE_PLAN, status=AngelaStep.STATUS_OK,
+                     title=f"взяла прошлый проект ({n} файлов) и дорабатываю")
+            issue_text = (
+                "Доработай СУЩЕСТВУЮЩИЙ проект (его файлы приведены ниже). "
+                "Внеси изменение пользователя: " + (run.prompt or "").strip()
+                + ". Сохрани всё остальное рабочим и не ломай вёрстку. "
+                "Верни ПОЛНЫЕ обновлённые версии изменённых файлов."
+            )
+            # Inherit the parent's friendly title.
+            if not run.title:
+                parent = AngelaRun.objects.filter(id=run.parent_run_id).only("title").first()
+                if parent and parent.title:
+                    set_status(run, run.status, title=parent.title)
+        else:
+            # --- intake: expand the casual idea into a real brief -------
+            log_step(run, phase=AngelaStep.PHASE_PLAN, status=AngelaStep.STATUS_STARTED,
+                     title="понимаю задачу")
+            title, brief = intake.expand_brief(
+                workspace_id=run.workspace_id, user_id=run.created_by_id,
+                idea=run.prompt or "", model=model,
+            )
+            issue_text = brief or (run.prompt or "")
+            if title:
+                set_status(run, run.status, title=title)
+            log_step(run, phase=AngelaStep.PHASE_PLAN, status=AngelaStep.STATUS_OK,
+                     title=(f"поняла задачу: {title}" if title else "поняла задачу так"),
+                     detail=brief)
 
-        # --- intake: expand the casual idea into a real brief -------
-        log_step(run, phase=AngelaStep.PHASE_PLAN, status=AngelaStep.STATUS_STARTED,
-                 title="понимаю задачу")
-        brief = intake.expand_brief(
-            workspace_id=run.workspace_id, user_id=run.created_by_id,
-            idea=run.prompt or "", model=model,
-        )
-        issue_text = brief or (run.prompt or "")
-        log_step(run, phase=AngelaStep.PHASE_PLAN, status=AngelaStep.STATUS_OK,
-                 title="поняла задачу так", detail=brief)
+        file_tree = sandbox.file_tree()
 
         # --- code ↔ self-review loop --------------------------------
         cap = max_fix_iterations()
@@ -90,6 +115,7 @@ def run_pipeline(run_id: str, *, run_docs: bool = True) -> None:
                 workspace_id=run.workspace_id, user_id=run.created_by_id,
                 issue_text=issue_text, file_tree=file_tree, model=model,
                 review_feedback=feedback, prior_summary=prior_summary,
+                existing_files=existing_files,
             )
             if not plan.files:
                 log_step(run, phase=AngelaStep.PHASE_CODE, status=AngelaStep.STATUS_FAILED,

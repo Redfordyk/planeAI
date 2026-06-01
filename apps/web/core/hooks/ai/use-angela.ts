@@ -37,6 +37,8 @@ export type AngelaRun = {
   workspace_id: string;
   project_id: string | null;
   issue_id: string | null;
+  parent_run_id: string | null;
+  title: string;
   target_repo: string;
   prompt: string;
   deploy_mode: AngelaDeployMode;
@@ -179,5 +181,29 @@ export function useAngela(workspaceId: string | undefined) {
     [base]
   );
 
-  return { targets, listRuns, startRun, getRun, approveProd, manualDeploy, cancelRun, generateDocs };
+  const refine = useCallback(
+    async (runId: string, prompt: string): Promise<AngelaRun> => {
+      if (!base) throw new Error("no workspace");
+      return jsonPost<AngelaRun>(`${base}/runs/${runId}/refine/`, { prompt });
+    },
+    [base]
+  );
+
+  const downloadUrl = useCallback(
+    (runId: string): string => (base ? `${base}/runs/${runId}/download/` : "#"),
+    [base]
+  );
+
+  return {
+    targets,
+    listRuns,
+    startRun,
+    getRun,
+    approveProd,
+    manualDeploy,
+    cancelRun,
+    generateDocs,
+    refine,
+    downloadUrl,
+  };
 }

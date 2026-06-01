@@ -19,8 +19,11 @@ the config allow-list resolves (sandbox isolation).
 
 from __future__ import annotations
 
+import io
 import logging
+import zipfile
 
+from django.http import HttpResponse
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -48,6 +51,8 @@ def _run_to_dict(r: AngelaRun, *, steps: bool = False) -> dict:
         "workspace_id": str(r.workspace_id),
         "project_id": str(r.project_id) if r.project_id else None,
         "issue_id": str(r.issue_id) if r.issue_id else None,
+        "parent_run_id": str(r.parent_run_id) if r.parent_run_id else None,
+        "title": r.title,
         "target_repo": r.target_repo,
         "prompt": r.prompt,
         "deploy_mode": r.deploy_mode,
@@ -255,3 +260,68 @@ class AngelaDocsView(APIView):
         from .tasks import angela_run as _run
         _run.apply_async(args=[str(run.id)], kwargs={"run_docs": True})
         return Response(_run_to_dict(run), status=201)
+
+
+class AngelaRefineView(APIView):
+    """POST runs/<id>/refine/ — create a child run that edits the parent's
+    result with a new instruction ("доработать"). Body: { prompt }."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, workspace_id, run_id):
+        ok, err, _cfg, http = _user_can_use_ai(request.user, workspace_id)
+        if not ok:
+            return Response({"error": err}, status=http)
+        parent = AngelaRun.objects.filter(id=run_id, workspace_id=workspace_id).first()
+        if parent is None:
+            return Response({"error": "not_found"}, status=404)
+        data = request.data if isinstance(request.data, dict) else {}
+        prompt = str(data.get("prompt") or "").strip()
+        if not prompt:
+            return Response({"error": "prompt required"}, status=400)
+        # The parent must have produced a published artifact to build on.
+        if not (config.artifacts_dir() / str(parent.id)).exists():
+            return Response({"error": "parent has no artifact to refine"}, status=409)
+
+        child = AngelaRun.objects.create(
+            workspace_id=workspace_id,
+            project_id=parent.project_id,
+            parent_run_id=parent.id,
+            title=parent.title,
+            target_repo=parent.target_repo,
+            prompt=prompt,
+            deploy_mode=parent.deploy_mode or AngelaRun.MODE_AUTONOMOUS_PROD,
+            status=AngelaRun.STATUS_QUEUED,
+            created_by=request.user,
+        )
+        angela_run.apply_async(args=[str(child.id)], kwargs={"run_docs": False})
+        return Response(_run_to_dict(child), status=201)
+
+
+class AngelaDownloadView(APIView):
+    """GET runs/<id>/download/ — stream the published artifact as a zip."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, workspace_id, run_id):
+        if not _is_workspace_member(request.user, workspace_id):
+            return Response({"error": "not_a_member"}, status=403)
+        run = AngelaRun.objects.filter(id=run_id, workspace_id=workspace_id).first()
+        if run is None:
+            return Response({"error": "not_found"}, status=404)
+        root = config.artifacts_dir() / str(run.id)
+        if not root.exists():
+            return Response({"error": "no artifact for this run"}, status=404)
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for item in root.rglob("*"):
+                if any(p in (".git", "__pycache__", ".pytest_cache") for p in item.parts):
+                    continue
+                if item.is_file():
+                    zf.write(item, item.relative_to(root).as_posix())
+        buf.seek(0)
+        name = (run.title or "angela-project").strip().replace(" ", "-")[:40] or "angela-project"
+        resp = HttpResponse(buf.getvalue(), content_type="application/zip")
+        resp["Content-Disposition"] = f'attachment; filename="{name}-{str(run.id)[:8]}.zip"'
+        return resp
