@@ -13,6 +13,7 @@ sandbox itself is just a checkout.
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -26,6 +27,33 @@ from .config import (
     resolve_target,
     workdir,
 )
+
+
+# Env vars that would leak the HOST Plane app into the sandbox. They MUST
+# be stripped before running the sandbox's own commands — otherwise, e.g.,
+# pytest-django (installed in the Plane backend image) sees
+# DJANGO_SETTINGS_MODULE and tries to bootstrap Plane's Django project
+# from the sandbox cwd, which fails collection ("No module named 'plane'")
+# and makes the target's tests impossible to pass. The sandbox must run
+# as if it were a clean, unrelated checkout.
+_STRIP_ENV_KEYS = (
+    "DJANGO_SETTINGS_MODULE",
+    "DJANGO_ALLOW_ASYNC_UNSAFE",
+    "PYTHONPATH",
+    "PYTHONSTARTUP",
+    "PYTEST_PLUGINS",
+    "PYTEST_ADDOPTS",
+)
+
+
+def _sandbox_env() -> dict[str, str]:
+    """A copy of the process env with host-Plane/Django contamination
+    removed, so the sandbox's test/build commands run in isolation."""
+    env = {k: v for k, v in os.environ.items() if k not in _STRIP_ENV_KEYS}
+    # Disable pytest's cache writes (sandbox is wiped each run anyway) and
+    # belt-and-suspenders against a stray pytest-django activation.
+    env["PYTEST_ADDOPTS"] = "-p no:cacheprovider"
+    return env
 
 
 logger = logging.getLogger("plane.ai.angela.sandbox")
@@ -157,6 +185,7 @@ class Sandbox:
                 capture_output=True,
                 text=True,
                 timeout=cmd_timeout(),
+                env=_sandbox_env(),
             )
             return CmdResult(
                 cmd=" ".join(argv),
