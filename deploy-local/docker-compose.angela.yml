@@ -1,0 +1,80 @@
+services:
+  plane-db:
+    image: pgvector/pgvector:0.8.2-pg15
+  api:
+    image: plane-backend-ai:angela
+    environment:
+      DJANGO_SETTINGS_MODULE: plane.settings.production_ai
+      PLANE_AI_RUNTIME_UNSAFE: "1"
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+      PLANEAI_DEEPSEEK_KEY: ${PLANEAI_DEEPSEEK_KEY:-}
+      PLANEAI_OPENAI_KEY: ${PLANEAI_OPENAI_KEY:-}
+      PLANEAI_CHAT_MODEL: ${PLANEAI_CHAT_MODEL:-deepseek-v4-flash}
+      PLANEAI_EMBED_MODEL: ${PLANEAI_EMBED_MODEL:-text-embedding-3-small}
+      PLANEAI_MONTHLY_TOKEN_BUDGET: ${PLANEAI_MONTHLY_TOKEN_BUDGET:-5000000}
+      ANGELA_ARTIFACTS_DIR: /srv/angela-artifacts
+      ANGELA_ARTIFACTS_URL_BASE: https://planeangel.forgedev.ru/angela-artifacts
+    volumes:
+      - /opt/planeAngela/ai-runtime:/usr/local/lib/python3.12/site-packages/planeai_runtime:ro
+      - /opt/angela-artifacts:/srv/angela-artifacts
+  worker:
+    image: plane-backend-ai:angela
+    environment:
+      DJANGO_SETTINGS_MODULE: plane.settings.production_ai
+      PLANE_AI_RUNTIME_UNSAFE: "1"
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+      PLANEAI_DEEPSEEK_KEY: ${PLANEAI_DEEPSEEK_KEY:-}
+      PLANEAI_OPENAI_KEY: ${PLANEAI_OPENAI_KEY:-}
+      PLANEAI_CHAT_MODEL: ${PLANEAI_CHAT_MODEL:-deepseek-v4-flash}
+      PLANEAI_EMBED_MODEL: ${PLANEAI_EMBED_MODEL:-text-embedding-3-small}
+      PLANEAI_MONTHLY_TOKEN_BUDGET: ${PLANEAI_MONTHLY_TOKEN_BUDGET:-5000000}
+      ANGELA_ARTIFACTS_DIR: /srv/angela-artifacts
+      ANGELA_ARTIFACTS_URL_BASE: https://planeangel.forgedev.ru/angela-artifacts
+    volumes:
+      - /opt/planeAngela/ai-runtime:/usr/local/lib/python3.12/site-packages/planeai_runtime:ro
+      - /opt/angela-artifacts:/srv/angela-artifacts
+  beat-worker:
+    image: plane-backend-ai:angela
+    environment:
+      DJANGO_SETTINGS_MODULE: plane.settings.production_ai
+      PLANE_AI_RUNTIME_UNSAFE: "1"
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+      PLANEAI_DEEPSEEK_KEY: ${PLANEAI_DEEPSEEK_KEY:-}
+      PLANEAI_OPENAI_KEY: ${PLANEAI_OPENAI_KEY:-}
+      PLANEAI_CHAT_MODEL: ${PLANEAI_CHAT_MODEL:-deepseek-v4-flash}
+      PLANEAI_EMBED_MODEL: ${PLANEAI_EMBED_MODEL:-text-embedding-3-small}
+      PLANEAI_MONTHLY_TOKEN_BUDGET: ${PLANEAI_MONTHLY_TOKEN_BUDGET:-5000000}
+      ANGELA_ARTIFACTS_DIR: /srv/angela-artifacts
+      ANGELA_ARTIFACTS_URL_BASE: https://planeangel.forgedev.ru/angela-artifacts
+    volumes:
+      - /opt/planeAngela/ai-runtime:/usr/local/lib/python3.12/site-packages/planeai_runtime:ro
+      - /opt/angela-artifacts:/srv/angela-artifacts
+  migrator:
+    image: plane-backend-ai:angela
+    environment:
+      DJANGO_SETTINGS_MODULE: plane.settings.production_ai
+      PLANE_AI_RUNTIME_UNSAFE: "1"
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY}
+      PLANEAI_DEEPSEEK_KEY: ${PLANEAI_DEEPSEEK_KEY:-}
+      PLANEAI_OPENAI_KEY: ${PLANEAI_OPENAI_KEY:-}
+      PLANEAI_CHAT_MODEL: ${PLANEAI_CHAT_MODEL:-deepseek-v4-flash}
+      PLANEAI_EMBED_MODEL: ${PLANEAI_EMBED_MODEL:-text-embedding-3-small}
+      PLANEAI_MONTHLY_TOKEN_BUDGET: ${PLANEAI_MONTHLY_TOKEN_BUDGET:-5000000}
+      ANGELA_ARTIFACTS_DIR: /srv/angela-artifacts
+      ANGELA_ARTIFACTS_URL_BASE: https://planeangel.forgedev.ru/angela-artifacts
+    volumes:
+      - /opt/planeAngela/ai-runtime:/usr/local/lib/python3.12/site-packages/planeai_runtime:ro
+      - /opt/angela-artifacts:/srv/angela-artifacts
+  web:
+    image: plane-web:angela
+  proxy:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  angela-artifacts:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - /opt/angela-artifacts:/usr/share/nginx/html:ro
+      - /opt/angela-artifacts-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8092:80"
